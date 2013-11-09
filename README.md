@@ -24,7 +24,10 @@ Installation
 
 4. Download and install OpenCV 
     - Source: http://opencv.org/
-    - Mac Homebrew: ```brew tap homebrew/science``` and ```brew install opencv```
-    - Debian/Ubuntu: ```sudo apt-get install opencv```
+    - Installation instructions here: http://docs.opencv.org/trunk/doc/tutorials/introduction/linux_install/linux_install.html  
+Project Layout
+--------------
 
+- ```colorizer/```: The main colorizer package.  Most of the code is in here.
+- ```tests/```: Test scripts
 
