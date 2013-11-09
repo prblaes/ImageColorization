@@ -25,6 +25,7 @@ Installation
 4. Download and install OpenCV 
     - Source: http://opencv.org/
     - Installation instructions here: http://docs.opencv.org/trunk/doc/tutorials/introduction/linux_install/linux_install.html  
+
 Project Layout
 --------------
 
