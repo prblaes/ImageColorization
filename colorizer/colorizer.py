@@ -2,6 +2,7 @@
 import numpy as np
 import cv
 import cv2
+import itertools
 
 class Colorizer(object):
     '''
@@ -10,6 +11,7 @@ class Colorizer(object):
 
     def __init__(self):
         self.levels = 256
+        self.colors = np.arange(self.levels**2)
 
     def load_image(self, path):
         '''
@@ -33,11 +35,15 @@ class Colorizer(object):
         quantiz = np.int0(np.linspace(0, 255, num_levels))
         color_levels = np.clip(np.int0(inds/div), 0, num_levels-1)
         palette = quantiz[color_levels]
-        self.l = cv2.convertScaleAbs(palette[self.l])
+        #self.l = cv2.convertScaleAbs(palette[self.l])
         self.a = cv2.convertScaleAbs(palette[self.a])
         self.b = cv2.convertScaleAbs(palette[self.b])
         c.levels = num_levels
 
+        a_unique = np.unique(self.a)
+        b_unique = np.unique(self.b)
+
+        self.colors = list(itertools.product(a_unique, b_unique))
 
 
 #Make plots to test image loading, Lab conversion, and color channel quantization.
@@ -61,7 +67,7 @@ if __name__ == '__main__':
         ax = fig.add_subplot(4,1,1)
         ax.imshow(cv2.merge((c.l, c.a, c.b)))
         ax.set_axis_off()
-        ax.set_title('L*a*b* Image, %d levels'%(c.levels))
+        ax.set_title('L*a*b* Image, %d colors'%(len(c.colors)))
 
         ax = fig.add_subplot(4,1,2)
         ax.imshow(c.l, cmap='gray')
