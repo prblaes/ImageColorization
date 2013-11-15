@@ -32,6 +32,8 @@ if __name__ == '__main__':
     #colorize the input image
     colorized_image = c.colorize(grayscale_image)
 
+    x = c.feature_surf(grayscale_image, (1, 1))
+
     #now, display the original image, the BW image, and our colorized version
     plt.ion()
     fig = plt.figure(1)

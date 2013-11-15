@@ -5,6 +5,8 @@ import cv2
 import itertools
 import sklearn
 
+SURF_WINDOW = 20
+
 class Colorizer(object):
     '''
     TODO: write docstring...
@@ -15,7 +17,17 @@ class Colorizer(object):
         self.colors = np.arange(self.levels**2)
         # declare classifiers
         self.SVMs = []
+        self.surf = cv2.DescriptorExtractor_create('SURF')
+        self.surf.setBool('extended', True) #use the 128-length descriptors
 
+    def feature_surf(self, img, pos):
+        '''
+        Gets the SURF descriptor of img at pos = (x,y).
+        Assume img is a single channel image.
+        '''
+        kp = cv2.KeyPoint(pos[0], pos[1], SURF_WINDOW)
+        _, des = self.surf.compute(img, [kp])
+        return des[0]
 
     def train(self, files):
         '''
@@ -27,7 +39,6 @@ class Colorizer(object):
         -- writes to class array of SVM objects.
         '''
         pass
-
 
 
     def colorize(self, grayscaleImage):
