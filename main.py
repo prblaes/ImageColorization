@@ -35,26 +35,25 @@ if __name__ == '__main__':
     x = c.feature_surf(grayscale_image, (1, 1))
 
     #now, display the original image, the BW image, and our colorized version
-    plt.ion()
     fig = plt.figure(1)
 
-    ax1 = fig.add_subplot(1, 4, 1)
+    ax1 = fig.add_subplot(1, 3, 1)
     ax1.imshow(cv2.cvtColor(cv2.imread(training_files[0]), cv.CV_BGR2RGB))
     ax1.set_axis_off()
     ax1.set_title('Training Image')
 
 
-    ax2 = fig.add_subplot(1, 4, 2)
-    ax2.imshow(cv2.cvtColor(cv2.imread(input_file), cv.CV_BGR2RGB))
-    ax2.set_axis_off()
-    ax2.set_title('Original RGB')
+    #ax2 = fig.add_subplot(1, 4, 2)
+    #ax2.imshow(cv2.cvtColor(cv2.imread(input_file), cv.CV_BGR2RGB))
+    #ax2.set_axis_off()
+    #ax2.set_title('Original RGB')
 
-    ax3 = fig.add_subplot(1, 4, 3)
+    ax3 = fig.add_subplot(1, 3, 2)
     ax3.imshow(grayscale_image, cmap='gray')
     ax3.set_axis_off()
     ax3.set_title('Grayscale')
 
-    ax4 = fig.add_subplot(1, 4, 4)
+    ax4 = fig.add_subplot(1, 3, 3)
     ax4.imshow(colorized_image)
     ax4.set_axis_off()
     ax4.set_title('Colorized')
