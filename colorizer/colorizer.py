@@ -9,7 +9,7 @@ import pdb
 
 SURF_WINDOW = 20
 windowSize = 10
-NTRAIN = 15000 #number of random pixels to train on
+NTRAIN = 10000 #number of random pixels to train on
 
 class Colorizer(object):
     '''
@@ -71,9 +71,8 @@ class Colorizer(object):
                 x = int(np.random.uniform(n))
                 y = int(np.random.uniform(m))
             
-                meanvar = np.array([self.getMean(l, (x,y))])#, self.getVariance(l, (x,y))]) #variance is giving NaN
-
-                feat = self.feature_surf(l, (x,y)) #np.concatenate((meanvar, self.feature_surf(l, (x,y))))
+                meanvar = np.array([self.getMean(l, (x,y)), self.getVariance(l, (x,y))]) #variance is giving NaN
+                feat = np.concatenate((meanvar, self.feature_surf(l, (x,y))))
 
                 features.append(feat)
                 classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
@@ -105,19 +104,19 @@ class Colorizer(object):
         Returns mean value over a windowed region around (x,y)
         '''
 
-        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[0]))
-        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[1]))
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
 
-        return np.mean(img[xlim[0]:xlim[1],ylim[0]:ylim[1]])
+        return np.mean(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])
 
         
 
     def getVariance(self, img, pos):
 
-        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[0]))
-        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[1]))
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
 
-        return np.var(img[xlim[0]:xlim[1],ylim[0]:ylim[1]])
+        return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])
         
 
     def colorize(self, img):
@@ -132,13 +131,16 @@ class Colorizer(object):
 
         num_classified = 0
         
-        output_a = np.zeros(img.shape)
-        output_b = np.zeros(img.shape)
+        output_a = img.copy()#np.zeros(img.shape)
+        output_b = img.copy()#np.zeros(img.shape)
         count=0
-        for x in xrange(int(n/4), int(n/2)):
-            for y in xrange(int(m/4), int(m/2)):
-                feat = np.array([self.feature_surf(img, (x,y)) ])
-                sys.stdout.write('\r%3.3f%%'%(100*count/(m*n)))
+        for x in xrange(n):
+            for y in xrange(m):
+                meanvar = np.array([self.getMean(img, (x,y)), self.getVariance(img, (x,y))]) #variance is giving NaN
+                feat = np.concatenate((meanvar, self.feature_surf(img, (x,y))))
+
+                #feat = np.array([self.feature_surf(img, (x,y)) ])
+                sys.stdout.write('\rcolorizing: %3.3f%%'%(100*count/(m*n)))
                 sys.stdout.flush()
                 count += 1
                 for i in xrange(self.ncolors):
@@ -150,7 +152,7 @@ class Colorizer(object):
                             num_classified += 1
         
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
-
+    
         print('\nclassified %d\n'%num_classified)
 
         return output_img
