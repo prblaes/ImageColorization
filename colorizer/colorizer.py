@@ -16,7 +16,7 @@ class Colorizer(object):
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=64):
+    def __init__(self, ncolors=256):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -59,8 +59,7 @@ class Colorizer(object):
 
             #quantize the a, b components
             a,b = self.posterize(a,b)
-            cv2.imshow('a',a)
-            cv2.imshow('b',b)
+
             #dimensions of image
             m,n = l.shape 
 
@@ -130,12 +129,13 @@ class Colorizer(object):
         m,n = img.shape
 
         num_classified = 0
+
+        _,output_a,output_b = cv2.split(cv2.cvtColor(cv2.merge((img, img, img)), cv.CV_RGB2Lab)) #default a and b for a grayscale image
         
-        output_a = img.copy()#np.zeros(img.shape)
-        output_b = img.copy()#np.zeros(img.shape)
         count=0
-        for x in xrange(n):
-            for y in xrange(m):
+        w=1
+        for x in xrange(0,n,w):
+            for y in xrange(0,m,w):
                 meanvar = np.array([self.getMean(img, (x,y)), self.getVariance(img, (x,y))]) #variance is giving NaN
                 feat = np.concatenate((meanvar, self.feature_surf(img, (x,y))))
 
@@ -147,8 +147,8 @@ class Colorizer(object):
                     if self.colors_present[i]:
                         if self.svm[i].predict(feat)==1:
                             a,b = self.label_to_color_map[i]
-                            output_a[y,x] = a
-                            output_b[y,x] = b
+                            output_a[y-int(w/2):y+int(w/2)+1,x-int(w/2):x+int(w/2)+1] = a
+                            output_b[y-int(w/2):y+int(w/2)+1,x-int(w/2):x+int(w/2)+1] = b
                             num_classified += 1
         
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)

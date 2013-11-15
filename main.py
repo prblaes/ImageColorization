@@ -32,7 +32,10 @@ if __name__ == '__main__':
     #colorize the input image
     colorized_image = c.colorize(grayscale_image)
 
-    x = c.feature_surf(grayscale_image, (1, 1))
+    #save the outputs
+    cv2.imwrite('output_gray.jpg', grayscale_image)
+    cv2.imwrite('output_gray.jpg', colorized_image)
+
 
     #now, display the original image, the BW image, and our colorized version
     fig = plt.figure(1)
