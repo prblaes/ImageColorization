@@ -42,22 +42,22 @@ class Colorizer(object):
         pass
 
 
-    def getMean(self, img, loc):
+    def getMean(self, img, pos):
         ''' 
         Returns mean value over a windowed region around (x,y)
         '''
 
-        xlim = (max(loc[0] - windowSize,0), min(loc[0] + windowSize,img.shape[0]))
-        ylim = (max(loc[1] - windowSize,0), min(loc[1] + windowSize,img.shape[1]))
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[0]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[1]))
 
         return np.mean(img[xlim[0]:xlim[1],ylim[0]:ylim[1]])
 
         
 
-    def getVariance(self, img, loc):
+    def getVariance(self, img, pos):
 
-        xlim = (max(loc[0] - windowSize,0), min(loc[0] + windowSize,img.shape[0]))
-        ylim = (max(loc[1] - windowSize,0), min(loc[1] + windowSize,img.shape[1]))
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[0]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[1]))
 
         return np.var(img[xlim[0]:xlim[1],ylim[0]:ylim[1]])
         
@@ -165,14 +165,14 @@ if __name__ == '__main__':
 
     #plt.show()
    
-    blank = np.zeros((100,100))
-    print blank
+    #blank = np.zeros((100,100))
+    #print blank
 
-    print type(blank)
-    print type(c.img)
-    ax.imshow(blank)
-    plt.show()
+    #print type(blank)
+    #print type(c.img)
+    #ax.imshow(blank)
+    #plt.show()
     print c.getMean(c.l,(150,220))
-    print c.getVariance(blank,(0,0))
+    print c.getVariance(c.l,(150,220))
 
 
