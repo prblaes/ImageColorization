@@ -3,6 +3,7 @@ import numpy as np
 import cv
 import cv2
 import itertools
+import sklearn
 
 class Colorizer(object):
     '''
@@ -12,6 +13,33 @@ class Colorizer(object):
     def __init__(self):
         self.levels = 256
         self.colors = np.arange(self.levels**2)
+        # declare classifiers
+        self.SVMs = []
+
+
+
+    def train(self, files):
+        '''
+        -- Reads in a set of training images. 
+        -- Converts from RGB to LAB colorspace.
+        -- Extracts feature vectors at each pixel of each training image.
+        -- (complexity reduction?).
+        -- Train a set of SVMs on the dataset (one vs. others classifiers, per each of nColors output colors)
+        -- writes to class array of SVM objects.
+        '''
+
+
+
+    def colorize(self, grayscaleImage):
+        '''
+        -- colorizes a grayscale image, using the set of SVMs defined by train().
+        '''
+        pass
+
+
+
+        
+        
 
     def load_image(self, path):
         '''
