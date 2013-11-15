@@ -118,7 +118,7 @@ class Colorizer(object):
         return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])
         
 
-    def colorize(self, img):
+    def colorize(self, img, skip=1):
         '''
         -- colorizes a grayscale image, using the set of SVMs defined by train().
 
@@ -133,9 +133,8 @@ class Colorizer(object):
         _,output_a,output_b = cv2.split(cv2.cvtColor(cv2.merge((img, img, img)), cv.CV_RGB2Lab)) #default a and b for a grayscale image
         
         count=0
-        w=1
-        for x in xrange(0,n,w):
-            for y in xrange(0,m,w):
+        for x in xrange(0,n,skip):
+            for y in xrange(0,m,skip):
                 meanvar = np.array([self.getMean(img, (x,y)), self.getVariance(img, (x,y))]) #variance is giving NaN
                 feat = np.concatenate((meanvar, self.feature_surf(img, (x,y))))
 
@@ -147,8 +146,8 @@ class Colorizer(object):
                     if self.colors_present[i]:
                         if self.svm[i].predict(feat)==1:
                             a,b = self.label_to_color_map[i]
-                            output_a[y-int(w/2):y+int(w/2)+1,x-int(w/2):x+int(w/2)+1] = a
-                            output_b[y-int(w/2):y+int(w/2)+1,x-int(w/2):x+int(w/2)+1] = b
+                            output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
+                            output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
                             num_classified += 1
         
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
