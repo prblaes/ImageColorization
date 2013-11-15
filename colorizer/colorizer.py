@@ -5,6 +5,8 @@ import cv2
 import itertools
 import sklearn
 
+windowSize = 10
+
 class Colorizer(object):
     '''
     TODO: write docstring...
@@ -15,6 +17,7 @@ class Colorizer(object):
         self.colors = np.arange(self.levels**2)
         # declare classifiers
         self.SVMs = []
+
 
 
 
@@ -29,6 +32,26 @@ class Colorizer(object):
         '''
 
 
+
+    def getMean(self, img, loc):
+        ''' 
+        Returns mean value over a windowed region around (x,y)
+        '''
+
+        xlim = (max(loc[0] - windowSize,0), min(loc[0] + windowSize,img.shape[0]))
+        ylim = (max(loc[1] - windowSize,0), min(loc[1] + windowSize,img.shape[1]))
+
+        return np.mean(img[xlim[0]:xlim[1],ylim[0]:ylim[1]])
+
+        
+
+    def getVariance(self, img, loc):
+
+        xlim = (max(loc[0] - windowSize,0), min(loc[0] + windowSize,img.shape[0]))
+        ylim = (max(loc[1] - windowSize,0), min(loc[1] + windowSize,img.shape[1]))
+
+        return np.var(img[xlim[0]:xlim[1],ylim[0]:ylim[1]])
+        
 
     def colorize(self, grayscaleImage):
         '''
@@ -85,7 +108,7 @@ if __name__ == '__main__':
     #plot the original
     fig = plt.figure(1)
     ax = fig.add_subplot(1, 1, 1)
-    ax.imshow(c.img)
+    #ax.imshow(c.img)
     ax.set_axis_off()
     ax.set_title('Original RGB Image')
    
@@ -114,22 +137,32 @@ if __name__ == '__main__':
         plt.subplots_adjust(hspace=0.3)
 
     #plot unquantized Lab components
-    plot_lab(2)
+    #plot_lab(2)
 
     #2 levels
-    c.posterize(2)
-    plot_lab(3)
+    #c.posterize(2)
+    #plot_lab(3)
 
     #8 levels
-    c.load_image('../test/cat.jpg') #reload because last posterize call overwrote originals
-    c.posterize(8)
-    plot_lab(4)
+    #c.load_image('../test/cat.jpg') #reload because last posterize call overwrote originals
+    #c.posterize(8)
+    #plot_lab(4)
 
     #16 levels
     c.load_image('../test/cat.jpg')
     c.posterize(16)
-    plot_lab(5)
+    #plot_lab(5)
 
-    plt.show()
+    #plt.show()
    
+    blank = np.zeros((100,100))
+    print blank
+
+    print type(blank)
+    print type(c.img)
+    ax.imshow(blank)
+    plt.show()
+    print c.getMean(c.l,(150,220))
+    print c.getVariance(blank,(0,0))
+
 
