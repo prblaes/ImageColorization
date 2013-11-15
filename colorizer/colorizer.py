@@ -17,7 +17,6 @@ class Colorizer(object):
         self.SVMs = []
 
 
-
     def train(self, files):
         '''
         -- Reads in a set of training images. 
@@ -27,14 +26,20 @@ class Colorizer(object):
         -- Train a set of SVMs on the dataset (one vs. others classifiers, per each of nColors output colors)
         -- writes to class array of SVM objects.
         '''
+        pass
 
 
 
     def colorize(self, grayscaleImage):
         '''
         -- colorizes a grayscale image, using the set of SVMs defined by train().
+
+        Returns:
+        -- ndarray(m,n,3): a mxn pixel RGB image
         '''
-        pass
+    
+        #pass through the grayscale image for now as a RGB image...
+        return cv2.merge((grayscaleImage, grayscaleImage, grayscaleImage))
 
 
 
