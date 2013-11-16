@@ -11,14 +11,14 @@ from scipy.fftpack import dct
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-NTRAIN = 5000 #number of random pixels to train on
+NTRAIN = 15000 #number of random pixels to train on
 
 class Colorizer(object):
     '''
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=64, probability=False):
+    def __init__(self, ncolors=256, probability=False):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -28,7 +28,7 @@ class Colorizer(object):
         self.discretize_color_space()
 
         # declare classifiers
-        self.svm = [SVC(probability=probability) for i in range(self.ncolors)]
+        self.svm = SVC(probability=probability)
         self.probability = probability
         self.colors_present = np.zeros(len(self.colors))
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -97,21 +97,9 @@ class Colorizer(object):
 
         features = np.array(features)
         classes = np.array(classes)
-    
-        #train the classifiers
-        try: 
-            for i in xrange(self.ncolors):
-                sys.stdout.write('\rtraining svm #%d'%i)
-                sys.stdout.flush()
-                y = np.array([1 if j==True else -1 for j in classes==i]) #generate +/-1 labels for this classifier
-               
-                #if the i^th color is actually present in the training image, train the corresponding classifier
-                if -1*len(y) != np.sum(y):
-                    self.svm[i].fit(features, y)
-                    self.colors_present[i] = 1
-
-        except Exception, e:
-            pdb.set_trace()
+       
+        #train the svm
+        self.svm.fit(features, classes)
             
         print('')
         
@@ -156,14 +144,12 @@ class Colorizer(object):
             for y in xrange(0,m,skip):
 
                 feat = self.get_features(img, (x,y))
-
-                #feat = np.array([self.feature_surf(img, (x,y)) ])
                 sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 sys.stdout.flush()
                 count += 1
 
                 if self.probability:
-                    probs = [self.svm[i].predict_proba(feat)[0][1] for i in xrange(self.ncolors) if self.colors_present[i]] #calc the probability for each color in cspace
+                    probs = self.svm.predict_proba(feat) #calc the probability for each color in cspace
                     ml_color = np.argmax(probs) #choose the best color
                     a,b = self.label_to_color_map[ml_color]
 
@@ -172,17 +158,13 @@ class Colorizer(object):
                     num_classified += 1
 
                 else:
-                    for i in xrange(self.ncolors):
-                        if self.colors_present[i]:
-                            if self.svm[i].predict(feat)==1:
-                                a,b = self.label_to_color_map[i]
-                                output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
-                                output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
-                                num_classified += 1
+                    ml_color = self.svm.predict(feat)[0]
+                    a,b, = self.label_to_color_map[ml_color]
+                    output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
+                    output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
         
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
     
-        print('\nclassified %d\n'%num_classified)
 
         return output_img
 
