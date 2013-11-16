@@ -1,3 +1,4 @@
+
 from __future__ import division
 import numpy as np
 import cv
@@ -9,7 +10,7 @@ import pdb
 
 SURF_WINDOW = 20
 windowSize = 10
-NTRAIN = 10000 #number of random pixels to train on
+#NTRAIN = 20000 #number of random pixels to train on
 
 class Colorizer(object):
     '''
@@ -64,17 +65,15 @@ class Colorizer(object):
             m,n = l.shape 
 
             #extract features from training image
-            for i in xrange(NTRAIN):
-
-                #choose random pixel in training image
-                x = int(np.random.uniform(n))
-                y = int(np.random.uniform(m))
+            # (Select uniformly-spaced training pixels)
+            for x in xrange(int(windowSize/2),n,windowSize):
+                for y in xrange(int(windowSize/2),m,windowSize):
             
-                meanvar = np.array([self.getMean(l, (x,y)), self.getVariance(l, (x,y))]) #variance is giving NaN
-                feat = np.concatenate((meanvar, self.feature_surf(l, (x,y))))
+                    meanvar = np.array([self.getMean(l, (x,y)), self.getVariance(l, (x,y))]) #variance is giving NaN
+                    feat = np.concatenate((meanvar, self.feature_surf(l, (x,y))))
 
-                features.append(feat)
-                classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
+                    features.append(feat)
+                    classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
 
         features = np.array(features)
         classes = np.array(classes)
