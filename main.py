@@ -22,13 +22,13 @@ if __name__ == '__main__':
     #training_files = ['images/houses/calhouse_0001.jpg' ]
     #input_file = 'images/houses/calhouse_0002.jpg'
 
-    #training_files = ['images/book_chapter/islande.jpg' ]
-    #input_file = 'images/book_chapter/paysage_gris.png'
+    training_files = ['images/book_chapter/islande.jpg' ]
+    input_file = 'images/book_chapter/paysage_gris.png'
 
-    training_files = ['images/cats/cat.jpg' ]
-    input_file = 'images/cats/cats3.jpg'
+    #training_files = ['images/cats/cat.jpg' ]
+    #input_file = 'images/cats/cats3.jpg'
     
-    c = Colorizer(probability=False)
+    c = Colorizer()
 
     #train the classifiers
     c.train(training_files)
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     grayscale_image = get_grayscale_from_color(input_file)
 
     #colorize the input image
-    colorized_image = c.colorize(grayscale_image,skip=4)
+    colorized_image = c.colorize(grayscale_image)
 
     #save the outputs
     cv2.imwrite('output_gray.jpg', grayscale_image)

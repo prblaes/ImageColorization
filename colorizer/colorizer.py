@@ -56,7 +56,7 @@ class Colorizer(object):
     def get_features(self, img, pos):
         intensity = np.array([img[pos[1], pos[0]]])
         position = self.feature_position(img, pos)
-        meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)]) #variance is giving NaN
+        meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)/1000]) #variance is giving NaN
         feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
         return feat
 
@@ -150,7 +150,7 @@ class Colorizer(object):
         num_classified = 0
 
         _,output_a,output_b = cv2.split(cv2.cvtColor(cv2.merge((img, img, img)), cv.CV_RGB2Lab)) #default a and b for a grayscale image
-        
+        #pixels_classified = zeros(size(img))
         count=0
         for x in xrange(0,n,skip):
             for y in xrange(0,m,skip):
@@ -163,8 +163,8 @@ class Colorizer(object):
                 count += 1
 
                 if self.probability:
-                    probs = [self.svm[i].predict_proba(feat) for i in xrange(self.ncolors)] #calc the probability for each color in cspace
-                    ml_color = np.argmax(probs)[0] #choose the best color
+                    probs = [self.svm[i].predict_proba(feat)[0][1] for i in xrange(self.ncolors) if self.colors_present[i]] #calc the probability for each color in cspace
+                    ml_color = np.argmax(probs) #choose the best color
                     a,b = self.label_to_color_map[ml_color]
 
                     output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
