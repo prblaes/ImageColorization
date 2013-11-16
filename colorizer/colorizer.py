@@ -12,6 +12,8 @@ from scipy.fftpack import dct
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
+gridSpacing = 4
+
 NTRAIN = 5000 #number of random pixels to train on
 
 class Colorizer(object):
@@ -19,7 +21,7 @@ class Colorizer(object):
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=64, probability=False):
+    def __init__(self, ncolors=128, probability=False):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -29,7 +31,10 @@ class Colorizer(object):
         self.discretize_color_space()
 
         # declare classifiers
-        self.svm = [SVC(probability=probability) for i in range(self.ncolors)]
+        #self.svm = [SVC(probability=probability) for i in range(self.ncolors)]
+        # Try with only one instantiated SVM (multi-class)
+        self.svm = SVC(probability= probability)
+
         self.probability = probability
         self.colors_present = np.zeros(len(self.colors))
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -59,6 +64,8 @@ class Colorizer(object):
         position = self.feature_position(img, pos)
         meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)]) #variance is giving NaN
         feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
+        #feat = np.concatenate((meanvar, self.feature_surf(img, pos)))
+        #print feat
         return feat
 
 
@@ -75,7 +82,7 @@ class Colorizer(object):
 
         features = []
         classes = []
-
+        numTrainingExamples = 0
         for f in files:
 
             l,a,b = self.load_image(f)
@@ -86,28 +93,37 @@ class Colorizer(object):
             #dimensions of image
             m,n = l.shape 
 
+
             #extract features from training image
             # (Select uniformly-spaced training pixels)
-            for x in xrange(int(windowSize/2),n,windowSize):
-                for y in xrange(int(windowSize/2),m,windowSize):
-
+            for x in xrange(int(gridSpacing/2),n,gridSpacing):
+                for y in xrange(int(gridSpacing/2),m,gridSpacing):
+                    sys.stdout.write('\rgenerating feature: %3.0f'%(numTrainingExamples))
+                    sys.stdout.flush()
+                    
                     features.append(self.get_features(l, (x,y)))
                     classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
 
+                    numTrainingExamples = numTrainingExamples + 1
+
         features = np.array(features)
         classes = np.array(classes)
-    
+        #print "Training pixels: ", numTrainingExamples 
         #train the classifiers
+        print " "
+        print "Training SVM" 
         try: 
-            for i in xrange(self.ncolors):
-                sys.stdout.write('\rtraining svm #%d'%i)
-                sys.stdout.flush()
-                y = np.array([1 if j==True else -1 for j in classes==i]) #generate +/-1 labels for this classifier
+            self.svm.fit(features,classes)
+
+#            for i in xrange(self.ncolors):
+#                sys.stdout.write('\rtraining svm #%d'%i)
+#                sys.stdout.flush()
+#                y = np.array([1 if j==True else -1 for j in classes==i]) #generate +/-1 labels for this classifier
                
                 #if the i^th color is actually present in the training image, train the corresponding classifier
-                if -1*len(y) != np.sum(y):
-                    self.svm[i].fit(features, y)
-                    self.colors_present[i] = 1
+#                if -1*len(y) != np.sum(y):
+#                    self.svm[i].fit(features, y)
+#                    self.colors_present[i] = 1
 
         except Exception, e:
             pdb.set_trace()
@@ -133,7 +149,7 @@ class Colorizer(object):
         xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
         ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
 
-        return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])
+        return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])/10000
         
 
     def colorize(self, img, skip=1):
@@ -171,14 +187,23 @@ class Colorizer(object):
                     num_classified += 1
 
                 else:
-                    for i in xrange(self.ncolors):
+                    #print self.svm.predict(feat)[[0]]
+                    a,b = self.label_to_color_map[int(self.svm.predict(feat)[[0]])]
+
+                    output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
+                    output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
+
+                    num_classified += 1
+
+                    '''for i in xrange(self.ncolors):
                         if self.colors_present[i]:
                             if self.svm[i].predict(feat)==1:
                                 a,b = self.label_to_color_map[i]
                                 output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
                                 output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
                                 num_classified += 1
-        
+                    '''
+
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
     
         print('\nclassified %d\n'%num_classified)
@@ -227,68 +252,10 @@ class Colorizer(object):
 #Should probably write as a proper unit test and move to a separate file.
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
+    training_files = ['images/houses/calhouse_0007.jpg' ]
 
     c = Colorizer()
-    c.load_image('../test/cat.jpg')
-    
-    #plot the original
-    fig = plt.figure(1)
-    ax = fig.add_subplot(1, 1, 1)
-    #ax.imshow(c.img)
-    ax.set_axis_off()
-    ax.set_title('Original RGB Image')
-   
-    #helper for plotting the Lab image components
-    def plot_lab(idx):
-        fig = plt.figure(idx, figsize=(10, 20))
-        ax = fig.add_subplot(4,1,1)
-        ax.imshow(cv2.merge((c.l, c.a, c.b)))
-        ax.set_axis_off()
-        ax.set_title('L*a*b* Image, %d colors'%(len(c.colors)))
 
-        ax = fig.add_subplot(4,1,2)
-        ax.imshow(c.l, cmap='gray')
-        ax.set_axis_off()
-        ax.set_title('L* Channel')
-
-        ax = fig.add_subplot(4,1,3)
-        ax.imshow(c.a, cmap='gray')
-        ax.set_axis_off()
-        ax.set_title('a* Channel')    
-        
-        ax = fig.add_subplot(4,1,4)
-        ax.imshow(c.b, cmap='gray')
-        ax.set_axis_off()
-        ax.set_title('b* Channel')
-        plt.subplots_adjust(hspace=0.3)
-
-    #plot unquantized Lab components
-    #plot_lab(2)
-
-    #2 levels
-    #c.posterize(2)
-    #plot_lab(3)
-
-    #8 levels
-    #c.load_image('../test/cat.jpg') #reload because last posterize call overwrote originals
-    #c.posterize(8)
-    #plot_lab(4)
-
-    #16 levels
-    c.load_image('../test/cat.jpg')
-    c.posterize(16)
-    #plot_lab(5)
-
-    #plt.show()
-   
-    #blank = np.zeros((100,100))
-    #print blank
-
-    #print type(blank)
-    #print type(c.img)
-    #ax.imshow(blank)
-    #plt.show()
-    print c.getMean(c.l,(150,220))
-    print c.getVariance(c.l,(150,220))
+    c.train(training_files)
 
 
