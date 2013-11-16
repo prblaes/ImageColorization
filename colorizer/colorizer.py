@@ -7,17 +7,19 @@ import itertools
 from sklearn.svm import SVC
 import sys
 import pdb
+from scipy.fftpack import dct
 
 SURF_WINDOW = 20
+DCT_WINDOW = 20
 windowSize = 10
-#NTRAIN = 20000 #number of random pixels to train on
+NTRAIN = 5000 #number of random pixels to train on
 
 class Colorizer(object):
     '''
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=256):
+    def __init__(self, ncolors=64, probability=False):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -27,7 +29,8 @@ class Colorizer(object):
         self.discretize_color_space()
 
         # declare classifiers
-        self.svm = [SVC() for i in range(self.ncolors)]
+        self.svm = [SVC(probability=probability) for i in range(self.ncolors)]
+        self.probability = probability
         self.colors_present = np.zeros(len(self.colors))
         self.surf = cv2.DescriptorExtractor_create('SURF')
         self.surf.setBool('extended', True) #use the 128-length descriptors
@@ -40,6 +43,25 @@ class Colorizer(object):
         kp = cv2.KeyPoint(pos[0], pos[1], SURF_WINDOW)
         _, des = self.surf.compute(img, [kp])
         return des[0]
+
+    def feature_dct(self, img, pos):
+        pass
+
+    def feature_position(self, img, pos):
+        m,n = img.shape
+        x_pos = pos[0]/n
+        y_pos = pos[1]/m
+
+        return np.array([x_pos, y_pos])
+
+    def get_features(self, img, pos):
+        intensity = np.array([img[pos[1], pos[0]]])
+        position = self.feature_position(img, pos)
+        meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)]) #variance is giving NaN
+        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
+        return feat
+
+
 
     def train(self, files):
         '''
@@ -68,11 +90,8 @@ class Colorizer(object):
             # (Select uniformly-spaced training pixels)
             for x in xrange(int(windowSize/2),n,windowSize):
                 for y in xrange(int(windowSize/2),m,windowSize):
-            
-                    meanvar = np.array([self.getMean(l, (x,y)), self.getVariance(l, (x,y))]) #variance is giving NaN
-                    feat = np.concatenate((meanvar, self.feature_surf(l, (x,y))))
 
-                    features.append(feat)
+                    features.append(self.get_features(l, (x,y)))
                     classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
 
         features = np.array(features)
@@ -134,20 +153,31 @@ class Colorizer(object):
         count=0
         for x in xrange(0,n,skip):
             for y in xrange(0,m,skip):
-                meanvar = np.array([self.getMean(img, (x,y)), self.getVariance(img, (x,y))]) #variance is giving NaN
-                feat = np.concatenate((meanvar, self.feature_surf(img, (x,y))))
+
+                feat = self.get_features(img, (x,y))
 
                 #feat = np.array([self.feature_surf(img, (x,y)) ])
-                sys.stdout.write('\rcolorizing: %3.3f%%'%(100*count/(m*n)))
+                sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 sys.stdout.flush()
                 count += 1
-                for i in xrange(self.ncolors):
-                    if self.colors_present[i]:
-                        if self.svm[i].predict(feat)==1:
-                            a,b = self.label_to_color_map[i]
-                            output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
-                            output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
-                            num_classified += 1
+
+                if self.probability:
+                    probs = [self.svm[i].predict_proba(feat) for i in xrange(self.ncolors)] #calc the probability for each color in cspace
+                    ml_color = np.argmax(probs)[0] #choose the best color
+                    a,b = self.label_to_color_map[ml_color]
+
+                    output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
+                    output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
+                    num_classified += 1
+
+                else:
+                    for i in xrange(self.ncolors):
+                        if self.colors_present[i]:
+                            if self.svm[i].predict(feat)==1:
+                                a,b = self.label_to_color_map[i]
+                                output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
+                                output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
+                                num_classified += 1
         
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
     

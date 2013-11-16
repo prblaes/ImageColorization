@@ -18,12 +18,18 @@ if __name__ == '__main__':
 
     #change these to point to your training file(s).  Assume that the "images" directory is a symlink to the 
     #cs_229_project Dropbox foler that Rasoul shared
+
+
     #training_files = ['images/houses/calhouse_0001.jpg' ]
     #input_file = 'images/houses/calhouse_0002.jpg'
-    training_files = ['images/cats/cats3.jpg' ]
-    input_file = 'images/cats/cats4.jpg'
+
+    #training_files = ['images/book_chapter/islande.jpg' ]
+    #input_file = 'images/book_chapter/paysage_gris.png'
+
+    training_files = ['images/cats/cat.jpg' ]
+    input_file = 'images/cats/cats3.jpg'
     
-    c = Colorizer()
+    c = Colorizer(probability=False)
 
     #train the classifiers
     c.train(training_files)
@@ -32,11 +38,11 @@ if __name__ == '__main__':
     grayscale_image = get_grayscale_from_color(input_file)
 
     #colorize the input image
-    colorized_image = c.colorize(grayscale_image)
+    colorized_image = c.colorize(grayscale_image,skip=4)
 
     #save the outputs
     cv2.imwrite('output_gray.jpg', grayscale_image)
-    cv2.imwrite('output_color.jpg', cv2.cvtColor(colorized_image,cv.CV_BGR2RGB))
+    cv2.imwrite('output_color.jpg', cv2.cvtColor(colorized_image, cv.CV_RGB2BGR))
 
 
     #now, display the original image, the BW image, and our colorized version
