@@ -11,7 +11,7 @@ from scipy.fftpack import dct
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-NTRAIN = 15000 #number of random pixels to train on
+NTRAIN = 5000 #number of random pixels to train on
 
 class Colorizer(object):
     '''
@@ -53,11 +53,22 @@ class Colorizer(object):
 
         return np.array([x_pos, y_pos])
 
+    def feature_histogram(self, img, pos):
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
+
+        patch = img[ylim[0]:ylim[1],xlim[0]:xlim[1]]
+        h, _ = np.histogram(patch, bins=np.arange(0,255,50)) 
+        h = h/np.sum(h)
+        return h
+
+
     def get_features(self, img, pos):
         intensity = np.array([img[pos[1], pos[0]]])
         position = self.feature_position(img, pos)
-        meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)/1000]) #variance is giving NaN
-        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
+        meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)/1000])
+        hist = self.feature_histogram(img, pos)
+        feat = np.concatenate((position, meanvar, hist, self.feature_surf(img, pos)))
         return feat
 
 
