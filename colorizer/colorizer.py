@@ -12,7 +12,7 @@ from scipy.fftpack import dct
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 4
+gridSpacing = 2
 
 NTRAIN = 5000 #number of random pixels to train on
 
@@ -31,7 +31,7 @@ class Colorizer(object):
         self.discretize_color_space()
 
         # declare classifiers
-        self.svm = SVC(probability= probability)
+        self.svm = SVC(probability=probability, gamma=0.1)
 
         self.probability = probability
         self.colors_present = np.zeros(len(self.colors))
@@ -227,6 +227,13 @@ class Colorizer(object):
         a_quant = cv2.convertScaleAbs(self.palette[a])
         b_quant = cv2.convertScaleAbs(self.palette[b])
         return a_quant, b_quant
+
+    
+    def get_edges(self, img, blur_width=2):
+        img_blurred = cv2.GaussianBlur(img, (0, 0), blur_width)
+        vh = cv2.Sobel(img_blurred, -1, 1, 0)
+        vv = cv2.Sobel(img_blurred, -1, 0, 1)
+        return vv, vh
 
 
 

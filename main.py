@@ -46,7 +46,7 @@ if __name__ == '__main__':
     cv2.imwrite('output_color.jpg', cv2.cvtColor(colorized_image, cv.CV_RGB2BGR))
 
 
-    l, a, b = cv2.split(cv2.cvtColor(colorized_image, cv.CV_BGR2Lab))
+    l, a, b = cv2.split(cv2.cvtColor(colorized_image, cv.CV_RGB2Lab))
     newColorMap = cv2.merge((128*np.uint8(np.ones(np.shape(l))),a,b))
 
 
