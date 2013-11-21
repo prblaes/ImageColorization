@@ -8,11 +8,12 @@ from sklearn.svm import SVC
 import sys
 import pdb
 from scipy.fftpack import dct
+from gco_python import pygco
 
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 2
+gridSpacing = 5
 
 NTRAIN = 5000 #number of random pixels to train on
 
@@ -21,7 +22,7 @@ class Colorizer(object):
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=128, random=False, probability=False):
+    def __init__(self, ncolors=256, random=False, probability=False):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -157,7 +158,13 @@ class Colorizer(object):
 
         num_classified = 0
 
-        _,output_a,output_b = cv2.split(cv2.cvtColor(cv2.merge((img, img, img)), cv.CV_RGB2Lab)) #default a and b for a grayscale image
+        _,raw_output_a,raw_output_b = cv2.split(cv2.cvtColor(cv2.merge((img, img, img)), cv.CV_RGB2Lab)) #default a and b for a grayscale image
+
+        output_a = np.zeros(raw_output_a.shape)
+        output_b = np.zeros(raw_output_b.shape)
+
+        num_classes = len(self.svm.classes_)
+        label_costs = np.zeros((m,n,num_classes))
         
         count=0
         for x in xrange(0,n,skip):
@@ -169,26 +176,32 @@ class Colorizer(object):
                 sys.stdout.flush()
                 count += 1
 
-                if self.probability:
-                    probs = [self.svm[i].predict_proba(feat) for i in xrange(self.ncolors)] #calc the probability for each color in cspace
-                    ml_color = np.argmax(probs)[0] #choose the best color
-                    a,b = self.label_to_color_map[ml_color]
+                a,b = self.label_to_color_map[int(self.svm.predict(feat)[[0]])]
 
-                    output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
-                    output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
-                    num_classified += 1
+                margins = self.svm.decision_function(feat)[0].reshape((num_classes, int((num_classes-1)/2)))
+                #get margins to estimate confidence for each class
+                for i in range(num_classes):
+                    #pdb.set_trace()
+                    cost = np.mean(margins[i, :])
+                    #label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = int(self.svm.predict_log_proba(feat)[0][i])
+                    label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
-                else:
-                    a,b = self.label_to_color_map[int(self.svm.predict(feat)[[0]])]
+                raw_output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
+                raw_output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
 
-                    output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
-                    output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
+                num_classified += 1
 
-                    num_classified += 1
+        #postprocess using graphcut optimization 
+        output_labels = self.graphcut(img, label_costs)
+        
+        for i in range(m):
+            for j in range(n):
+                a,b = self.label_to_color_map[self.svm.classes_[output_labels[i,j]]]
+                output_a[i,j] = a
+                output_b[i,j] = b
 
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
-    
-        print('\nclassified %d%%\n'% (100*num_classified*(skip**2)/(m*n)))
+        print('\nclassified %d%%\n'% np.max([100,(100*num_classified*(skip**2)/(m*n))]))
 
         return output_img
 
@@ -233,7 +246,44 @@ class Colorizer(object):
         img_blurred = cv2.GaussianBlur(img, (0, 0), blur_width)
         vh = cv2.Sobel(img_blurred, -1, 1, 0)
         vv = cv2.Sobel(img_blurred, -1, 0, 1)
+
+        vh = vh/np.max(vh)
+        vv = vv/np.max(vv)
+
         return vv, vh
+
+    def graphcut(self, img, label_costs):
+
+        label_classes = self.svm.classes_
+        num_classes = len(label_classes)
+        
+        #calculate pariwise potiential costs (distance between color classes)
+        pairwise_costs = 50*(np.ones((num_classes, num_classes)) - np.eye(num_classes))
+        #pairwise_costs = np.zeros((num_classes, num_classes))
+        #for i in range(num_classes):
+        #    for j in range(num_classes):
+        #        (c1_a, c1_b) = self.label_to_color_map[i]
+        #        (c2_a, c2_b) = self.label_to_color_map[j]
+        #        pairwise_costs[i,j] = np.sqrt((c1_a-c2_a)**2 + (c1_b-c2_b)**2)
+        
+        #get edge weights
+        vv, vh = self.get_edges(img)
+
+        label_costs_int32 = (10*label_costs).astype('int32')
+        pairwise_costs_int32 = (pairwise_costs).astype('int32')
+        vv_int32 = (1/vv).astype('int32')
+        vh_int32 = (1/vh).astype('int32')
+
+        #pdb.set_trace()
+        
+        #perform graphcut optimization
+        new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=10) 
+
+        #pdb.set_trace()
+
+        return new_labels
+        
+
 
 
 
