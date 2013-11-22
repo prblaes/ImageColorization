@@ -24,11 +24,11 @@ if __name__ == '__main__':
     #training_files = ['images/houses/calhouse_0001.jpg' ]
     #input_file = 'images/houses/calhouse_0002.jpg'
 
-    #training_files = ['images/book_chapter/islande.jpg' ]
-    #input_file = 'images/book_chapter/paysage_gris.png'
+    training_files = ['images/book_chapter/islande.jpg' ]
+    input_file = 'images/book_chapter/paysage_gris.png'
 
-    training_files = ['images/houses/calhouse_0001.jpg' ]
-    input_file = 'images/houses/calhouse_0002.jpg'
+    #training_files = ['images/houses/calhouse_0001.jpg' ]
+    #input_file = 'images/houses/calhouse_0002.jpg'
     
     c = Colorizer(probability=False)
 
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     grayscale_image = get_grayscale_from_color(input_file)
 
     #colorize the input image
-    colorized_image = c.colorize(grayscale_image,skip=1)
+    colorized_image = c.colorize(grayscale_image,skip=8)
 
     #save the outputs
     cv2.imwrite('output_gray.jpg', grayscale_image)
@@ -73,6 +73,7 @@ if __name__ == '__main__':
     ax4.imshow(cv2.cvtColor(newColorMap,cv.CV_Lab2RGB))
     ax4.set_axis_off()
     ax4.set_title('New colormap')
+    plt.savefig('/shared/users/prblaes/ImageColorization/output_figure4.png')
     plt.show()
 
 

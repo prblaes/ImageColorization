@@ -13,7 +13,7 @@ from gco_python import pygco
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 5
+gridSpacing = 6
 
 NTRAIN = 5000 #number of random pixels to train on
 
@@ -32,10 +32,11 @@ class Colorizer(object):
         self.discretize_color_space()
 
         # declare classifiers
-        self.svm = SVC(probability=probability, gamma=0.1)
+        #self.svm = SVC(probability=probability, gamma=0.1)
+        self.svm = [SVC(probability=probability, gamma=0.1) for i in range(self.ncolors)]
 
         self.probability = probability
-        self.colors_present = np.zeros(len(self.colors))
+        self.colors_present = []
         self.surf = cv2.DescriptorExtractor_create('SURF')
         self.surf.setBool('extended', True) #use the 128-length descriptors
 
@@ -118,7 +119,11 @@ class Colorizer(object):
         print " "
         print "Training SVM" 
         try: 
-            self.svm.fit(features,classes)
+            for i in range(self.ncolors):
+                if len(np.where(classes==i)[0])>0:
+                    curr_class = (classes==i).astype(np.int32)
+                    self.colors_present.append(i)
+                    self.svm[i].fit(features,(classes==i).astype(np.int32))
 
         except Exception, e:
             pdb.set_trace()
@@ -163,7 +168,7 @@ class Colorizer(object):
         output_a = np.zeros(raw_output_a.shape)
         output_b = np.zeros(raw_output_b.shape)
 
-        num_classes = len(self.svm.classes_)
+        num_classes = len(self.colors_present)
         label_costs = np.zeros((m,n,num_classes))
         
         count=0
@@ -176,18 +181,18 @@ class Colorizer(object):
                 sys.stdout.flush()
                 count += 1
 
-                a,b = self.label_to_color_map[int(self.svm.predict(feat)[[0]])]
+                #a,b = self.label_to_color_map[int(self.svm.predict(feat)[[0]])]
 
-                margins = self.svm.decision_function(feat)[0].reshape((num_classes, int((num_classes-1)/2)))
+                #margins = self.svm.decision_function(feat)[0].reshape((num_classes, int((num_classes-1)/2)))
                 #get margins to estimate confidence for each class
-                for i in range(num_classes):
+                for i in range(len(self.colors_present)):
                     #pdb.set_trace()
-                    cost = np.mean(margins[i, :])
+                    cost = -1*self.svm[self.colors_present[i]].decision_function(feat)[0]
                     #label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = int(self.svm.predict_log_proba(feat)[0][i])
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
-                raw_output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
-                raw_output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
+                #raw_output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
+                #raw_output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
 
                 num_classified += 1
 
@@ -196,7 +201,7 @@ class Colorizer(object):
         
         for i in range(m):
             for j in range(n):
-                a,b = self.label_to_color_map[self.svm.classes_[output_labels[i,j]]]
+                a,b = self.label_to_color_map[self.colors_present[output_labels[i,j]]]
                 output_a[i,j] = a
                 output_b[i,j] = b
 
@@ -242,35 +247,34 @@ class Colorizer(object):
         return a_quant, b_quant
 
     
-    def get_edges(self, img, blur_width=2):
+    def get_edges(self, img, blur_width=1):
         img_blurred = cv2.GaussianBlur(img, (0, 0), blur_width)
         vh = cv2.Sobel(img_blurred, -1, 1, 0)
         vv = cv2.Sobel(img_blurred, -1, 0, 1)
 
-        vh = vh/np.max(vh)
-        vv = vv/np.max(vv)
+        vh = -vh/np.max(vh)
+        vv = -vv/np.max(vv)
 
         return vv, vh
 
     def graphcut(self, img, label_costs):
 
-        label_classes = self.svm.classes_
-        num_classes = len(label_classes)
+        num_classes = len(self.colors_present)
         
         #calculate pariwise potiential costs (distance between color classes)
-        pairwise_costs = 50*(np.ones((num_classes, num_classes)) - np.eye(num_classes))
-        #pairwise_costs = np.zeros((num_classes, num_classes))
-        #for i in range(num_classes):
-        #    for j in range(num_classes):
-        #        (c1_a, c1_b) = self.label_to_color_map[i]
-        #        (c2_a, c2_b) = self.label_to_color_map[j]
-        #        pairwise_costs[i,j] = np.sqrt((c1_a-c2_a)**2 + (c1_b-c2_b)**2)
+        #pairwise_costs = 50*(np.ones((num_classes, num_classes)) - np.eye(num_classes))
+        pairwise_costs = np.zeros((num_classes, num_classes))
+        for i in range(num_classes):
+            for j in range(num_classes):
+                (c1_a, c1_b) = self.label_to_color_map[i]
+                (c2_a, c2_b) = self.label_to_color_map[j]
+                pairwise_costs[i,j] = np.sqrt((c1_a-c2_a)**2 + (c1_b-c2_b)**2)
         
         #get edge weights
         vv, vh = self.get_edges(img)
 
         label_costs_int32 = (10*label_costs).astype('int32')
-        pairwise_costs_int32 = (pairwise_costs).astype('int32')
+        pairwise_costs_int32 = (10000*pairwise_costs).astype('int32')
         vv_int32 = (1/vv).astype('int32')
         vh_int32 = (1/vh).astype('int32')
 
