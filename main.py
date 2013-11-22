@@ -24,11 +24,20 @@ if __name__ == '__main__':
     #training_files = ['images/houses/calhouse_0001.jpg' ]
     #input_file = 'images/houses/calhouse_0002.jpg'
 
-    #training_files = ['images/book_chapter/islande.jpg' ]
-    #input_file = 'images/book_chapter/paysage_gris.png'
+#    training_files = ['images/book_chapter/islande.jpg' ]
+#    input_file = 'images/book_chapter/paysage_gris.png'
 
-    training_files = ['images/houses/calhouse_0001.jpg' ]
-    input_file = 'images/houses/calhouse_0002.jpg'
+    training_files = ['test/jp.jpg' ]
+    input_file = 'test/chris.jpg'
+
+    #training_files = ['images/houses/calhouse_0001.jpg' ]
+    #input_file = 'images/houses/calhouse_0002.jpg'
+    
+    #training_files = ['test/ch1.jpg']
+    #input_file = 'test/ch1.jpg'
+    
+    #training_files = ['images/cats/cat.jpg','images/cats/cats4.jpg']
+    #input_file = 'images/cats/cats3.jpg'
     
     c = Colorizer(probability=False)
 
@@ -39,14 +48,14 @@ if __name__ == '__main__':
     grayscale_image = get_grayscale_from_color(input_file)
 
     #colorize the input image
-    colorized_image = c.colorize(grayscale_image,skip=1)
+    colorized_image = c.colorize(grayscale_image,skip=2)
 
     #save the outputs
     cv2.imwrite('output_gray.jpg', grayscale_image)
     cv2.imwrite('output_color.jpg', cv2.cvtColor(colorized_image, cv.CV_RGB2BGR))
 
 
-    l, a, b = cv2.split(cv2.cvtColor(colorized_image, cv.CV_BGR2Lab))
+    l, a, b = cv2.split(cv2.cvtColor(colorized_image, cv.CV_RGB2Lab))
     newColorMap = cv2.merge((128*np.uint8(np.ones(np.shape(l))),a,b))
 
 

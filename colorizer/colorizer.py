@@ -5,14 +5,17 @@ import cv
 import cv2
 import itertools
 from sklearn.svm import SVC
+from sklearn import preprocessing
 import sys
 import pdb
 from scipy.fftpack import dct
+from scipy.cluster.vq import kmeans,vq
+import scipy.ndimage.filters
 
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 4
+gridSpacing = 2
 
 NTRAIN = 5000 #number of random pixels to train on
 
@@ -21,7 +24,7 @@ class Colorizer(object):
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=128, probability=False):
+    def __init__(self, ncolors=256, probability=False):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -33,8 +36,9 @@ class Colorizer(object):
         # declare classifiers
         #self.svm = [SVC(probability=probability) for i in range(self.ncolors)]
         # Try with only one instantiated SVM (multi-class)
-        self.svm = SVC(probability= probability)
-
+        self.svm = SVC(probability= probability,kernel='rbf',gamma=0.1)    # Multi-class SVM
+        self.scaler = preprocessing.MinMaxScaler()                          # Scaling object -- Normalizes feature array
+        
         self.probability = probability
         self.colors_present = np.zeros(len(self.colors))
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -63,8 +67,10 @@ class Colorizer(object):
         intensity = np.array([img[pos[1], pos[0]]])
         position = self.feature_position(img, pos)
         meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)]) #variance is giving NaN
-        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
+        #laplacian = self.getLaplacian(img,pos)
+#        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
         #feat = np.concatenate((meanvar, self.feature_surf(img, pos)))
+        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
         #print feat
         return feat
 
@@ -87,6 +93,8 @@ class Colorizer(object):
 
             l,a,b = self.load_image(f)
 
+            a,b = self.posterize_kmeans(a,b,16)
+
             #quantize the a, b components
             a,b = self.posterize(a,b)
 
@@ -106,7 +114,10 @@ class Colorizer(object):
 
                     numTrainingExamples = numTrainingExamples + 1
 
-        features = np.array(features)
+        # normalize columns
+        features = self.scaler.fit_transform(np.array(features))
+        print features
+#        features = np.array(features)
         classes = np.array(classes)
         #print "Training pixels: ", numTrainingExamples 
         #train the classifiers
@@ -128,8 +139,9 @@ class Colorizer(object):
         except Exception, e:
             pdb.set_trace()
             
-        print('')
-        
+        print " "
+        # print the number of support vectors for each class
+        print "Number of support vectors: ", self.svm.n_support_
         #pdb.set_trace()
 
     def getMean(self, img, pos):
@@ -149,8 +161,17 @@ class Colorizer(object):
         xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
         ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
 
-        return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])/10000
+        return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])/1000 #switched to Standard Deviation --A
         
+    def getLaplacian(self, img, pos):
+
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
+
+        lap = scipy.ndimage.filters.laplace(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])
+        return np.ravel(lap)
+
+
 
     def colorize(self, img, skip=1):
         '''
@@ -170,7 +191,7 @@ class Colorizer(object):
         for x in xrange(0,n,skip):
             for y in xrange(0,m,skip):
 
-                feat = self.get_features(img, (x,y))
+                feat = self.scaler.transform(self.get_features(img, (x,y)))
 
                 #feat = np.array([self.feature_surf(img, (x,y)) ])
                 sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
@@ -240,14 +261,51 @@ class Colorizer(object):
         self.color_to_label_map = {c:i for i,c in enumerate(self.colors)} #this maps the color pair to the index of the color
         self.label_to_color_map = dict(zip(self.color_to_label_map.values(),self.color_to_label_map.keys()))
 
+    '''
+    def discretize_color_space_kmeans(self, a, b, k):
+        w,h = np.shape(a)
+        pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
+        # cluster
+        centroids,_ = kmeans(pixel,k)
 
+        inds = np.arange(0, 256)
+        div = np.linspace(0, 255, self.levels+1)[1]
+        quantiz = np.int0(np.linspace(0, 255, self.levels))
+        color_levels = np.clip(np.int0(inds/div), 0, self.levels-1)
+        self.palette = quantiz[color_levels]
+        bins = np.unique(self.palette) #the actual color bins
+        self.colors = list(itertools.product(bins, bins))
+        self.color_to_label_map = {c:i for i,c in enumerate(self.colors)} #this maps the color pair to the index of the color
+        self.label_to_color_map = dict(zip(self.color_to_label_map.values(),self.color_to_label_map.keys()))
+    '''
     def posterize(self, a, b):
+
         a_quant = cv2.convertScaleAbs(self.palette[a])
         b_quant = cv2.convertScaleAbs(self.palette[b])
         return a_quant, b_quant
 
+    
+    def posterize_kmeans(self, a, b, k):
+        w,h = np.shape(a)
+        
+        # reshape matrix
+        pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
 
+        # cluster
+        centroids,_ = kmeans(pixel,k) # six colors will be found
 
+        # quantization
+        qnt,_ = vq(pixel,centroids)
+
+        # reshape the result of the quantization
+        centers_idx = np.reshape(qnt,(w,h))
+        clustered = centroids[centers_idx]
+
+        a_quant = clustered[:,:,0]
+        b_quant = clustered[:,:,1]
+        return a_quant, b_quant
+
+    
 #Make plots to test image loading, Lab conversion, and color channel quantization.
 #Should probably write as a proper unit test and move to a separate file.
 if __name__ == '__main__':
