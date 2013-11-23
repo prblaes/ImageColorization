@@ -23,12 +23,7 @@ class Colorizer(object):
     '''
     TODO: write docstring...
     '''
-
-<<<<<<< HEAD
     def __init__(self, ncolors=256, probability=False):
-=======
-    def __init__(self, ncolors=128, random=False, probability=False):
->>>>>>> 9e79703851c883aa3877501117b006a54b4bf4dc
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -38,16 +33,11 @@ class Colorizer(object):
         self.discretize_color_space()
 
         # declare classifiers
-<<<<<<< HEAD
         #self.svm = [SVC(probability=probability) for i in range(self.ncolors)]
         # Try with only one instantiated SVM (multi-class)
         self.svm = SVC(probability= probability,kernel='rbf',gamma=0.1)    # Multi-class SVM
         self.scaler = preprocessing.MinMaxScaler()                          # Scaling object -- Normalizes feature array
         
-=======
-        self.svm = SVC(probability=probability, gamma=0.1)
-
->>>>>>> 9e79703851c883aa3877501117b006a54b4bf4dc
         self.probability = probability
         self.colors_present = np.zeros(len(self.colors))
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -84,16 +74,11 @@ class Colorizer(object):
         intensity = np.array([img[pos[1], pos[0]]])
         position = self.feature_position(img, pos)
         meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)]) #variance is giving NaN
-<<<<<<< HEAD
         #laplacian = self.getLaplacian(img,pos)
 #        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
         #feat = np.concatenate((meanvar, self.feature_surf(img, pos)))
         feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
         #print feat
-=======
-        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
-
->>>>>>> 9e79703851c883aa3877501117b006a54b4bf4dc
         return feat
 
 
@@ -150,16 +135,12 @@ class Colorizer(object):
         except Exception, e:
             pdb.set_trace()
             
-<<<<<<< HEAD
         print " "
         # print the number of support vectors for each class
         print "Number of support vectors: ", self.svm.n_support_
         #pdb.set_trace()
-=======
         print('')
         
->>>>>>> 9e79703851c883aa3877501117b006a54b4bf4dc
-
     def getMean(self, img, pos):
         ''' 
         Returns mean value over a windowed region around (x,y)
