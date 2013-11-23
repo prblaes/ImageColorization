@@ -24,11 +24,21 @@ if __name__ == '__main__':
     #training_files = ['images/houses/calhouse_0001.jpg' ]
     #input_file = 'images/houses/calhouse_0002.jpg'
 
-    training_files = ['images/book_chapter/islande.jpg' ]
-    input_file = 'images/book_chapter/paysage_gris.png'
 
-    #training_files = ['images/houses/calhouse_0001.jpg' ]
-    #input_file = 'images/houses/calhouse_0002.jpg'
+#    training_files = ['images/book_chapter/islande.jpg' ]
+#    input_file = 'images/book_chapter/paysage_gris.png'
+
+    #training_files = ['test/jp.jpg' ]
+    #input_file = 'test/chris.jpg'
+
+    training_files = ['images/houses/calhouse_0001.jpg' ]
+    input_file = 'images/houses/calhouse_0002.jpg'
+    
+    #training_files = ['test/ch1.jpg']
+    #input_file = 'test/ch1.jpg'
+    
+    #training_files = ['images/cats/cat.jpg','images/cats/cats4.jpg']
+    #input_file = 'images/cats/cats3.jpg'
     
     c = Colorizer(probability=False)
 

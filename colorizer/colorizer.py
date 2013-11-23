@@ -5,15 +5,18 @@ import cv
 import cv2
 import itertools
 from sklearn.svm import SVC
+from sklearn import preprocessing
 import sys
 import pdb
 from scipy.fftpack import dct
 from gco_python import pygco
+from scipy.cluster.vq import kmeans,vq
+import scipy.ndimage.filters
 
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 6
+gridSpacing = 5
 
 NTRAIN = 5000 #number of random pixels to train on
 
@@ -22,19 +25,22 @@ class Colorizer(object):
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=256, random=False, probability=False):
+    def __init__(self, ncolors=16, random=False, probability=False):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
-        self.ncolors = self.levels**2 #recalculate ncolors in case the provided parameter is not a perfect square
+        #self.ncolors = self.levels**2 #recalculate ncolors in case the provided parameter is not a perfect square
+        self.ncolors = ncolors
         
         #generate color palette for discrities Lab space
-        self.discretize_color_space()
+        #self.discretize_color_space()
 
         # declare classifiers
         #self.svm = SVC(probability=probability, gamma=0.1)
         self.svm = [SVC(probability=probability, gamma=0.1) for i in range(self.ncolors)]
 
+        self.scaler = preprocessing.MinMaxScaler()                          # Scaling object -- Normalizes feature array
+        
         self.probability = probability
         self.colors_present = []
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -71,8 +77,11 @@ class Colorizer(object):
         intensity = np.array([img[pos[1], pos[0]]])
         position = self.feature_position(img, pos)
         meanvar = np.array([self.getMean(img, pos), self.getVariance(img, pos)]) #variance is giving NaN
+        #laplacian = self.getLaplacian(img,pos)
+#        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
+        #feat = np.concatenate((meanvar, self.feature_surf(img, pos)))
         feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
-
+        #print feat
         return feat
 
 
@@ -94,8 +103,10 @@ class Colorizer(object):
 
             l,a,b = self.load_image(f)
 
+            a,b = self.posterize_kmeans(a,b,self.ncolors)
+
             #quantize the a, b components
-            a,b = self.posterize(a,b)
+            #a,b = self.posterize(a,b)
 
             #dimensions of image
             m,n = l.shape 
@@ -112,7 +123,10 @@ class Colorizer(object):
 
                     numTrainingExamples = numTrainingExamples + 1
 
-        features = np.array(features)
+        # normalize columns
+        features = self.scaler.fit_transform(np.array(features))
+        print features
+#        features = np.array(features)
         classes = np.array(classes)
 
         #train the classifiers
@@ -127,10 +141,14 @@ class Colorizer(object):
 
         except Exception, e:
             pdb.set_trace()
+
             
+        print " "
+        # print the number of support vectors for each class
+        #print "Number of support vectors: ", self.svm.n_support_
+        #pdb.set_trace()
         print('')
         
-
     def getMean(self, img, pos):
         ''' 
         Returns mean value over a windowed region around (x,y)
@@ -148,8 +166,17 @@ class Colorizer(object):
         xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
         ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
 
-        return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])/10000
+        return np.var(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])/1000 #switched to Standard Deviation --A
         
+    def getLaplacian(self, img, pos):
+
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
+
+        lap = scipy.ndimage.filters.laplace(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])
+        return np.ravel(lap)
+
+
 
     def colorize(self, img, skip=1):
         '''
@@ -175,26 +202,16 @@ class Colorizer(object):
         for x in xrange(0,n,skip):
             for y in xrange(0,m,skip):
 
-                feat = self.get_features(img, (x,y))
+                feat = self.scaler.transform(self.get_features(img, (x,y)))
 
                 sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 sys.stdout.flush()
                 count += 1
 
-                #a,b = self.label_to_color_map[int(self.svm.predict(feat)[[0]])]
-
-                #margins = self.svm.decision_function(feat)[0].reshape((num_classes, int((num_classes-1)/2)))
                 #get margins to estimate confidence for each class
-                for i in range(len(self.colors_present)):
-                    #pdb.set_trace()
+                for i in range(num_classes):
                     cost = -1*self.svm[self.colors_present[i]].decision_function(feat)[0]
-                    #label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = int(self.svm.predict_log_proba(feat)[0][i])
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
-
-                #raw_output_a[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = a
-                #raw_output_b[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = b
-
-                num_classified += 1
 
         #postprocess using graphcut optimization 
         output_labels = self.graphcut(img, label_costs)
@@ -264,33 +281,54 @@ class Colorizer(object):
         #calculate pariwise potiential costs (distance between color classes)
         #pairwise_costs = 50*(np.ones((num_classes, num_classes)) - np.eye(num_classes))
         pairwise_costs = np.zeros((num_classes, num_classes))
-        for i in range(num_classes):
-            for j in range(num_classes):
-                (c1_a, c1_b) = self.label_to_color_map[i]
-                (c2_a, c2_b) = self.label_to_color_map[j]
-                pairwise_costs[i,j] = np.sqrt((c1_a-c2_a)**2 + (c1_b-c2_b)**2)
+        sys.stdout.write('\n')
+        for ii in range(num_classes):
+            for jj in range(num_classes):
+                c1 = np.array(self.label_to_color_map[ii])
+                c2 = np.array(self.label_to_color_map[jj])
+                pairwise_costs[ii,jj] = np.linalg.norm(c1-c2)
+                sys.stdout.write('%d\t'%int(pairwise_costs[ii,jj]))
+            sys.stdout.write('\n')
         
         #get edge weights
         vv, vh = self.get_edges(img)
 
         label_costs_int32 = (10*label_costs).astype('int32')
-        pairwise_costs_int32 = (10000*pairwise_costs).astype('int32')
+        pairwise_costs_int32 = (1000*pairwise_costs).astype('int32')
         vv_int32 = (1/vv).astype('int32')
         vh_int32 = (1/vh).astype('int32')
 
-        #pdb.set_trace()
-        
         #perform graphcut optimization
-        new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=10) 
-
-        #pdb.set_trace()
+        new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=1) 
 
         return new_labels
         
 
+    def posterize_kmeans(self, a, b, k):
+        w,h = np.shape(a)
+        
+        # reshape matrix
+        pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
 
+        # cluster
+        centroids,_ = kmeans(pixel,k) # six colors will be found
+ 
+        # quantization
+        qnt,_ = vq(pixel,centroids)
 
+        # reshape the result of the quantization
+        centers_idx = np.reshape(qnt,(w,h))
+        clustered = centroids[centers_idx]
 
+        #color-mapping lookup tables
+        self.color_to_label_map = {c:i for i,c in enumerate([tuple(i) for i in centroids])} #this maps the color pair to the index of the color
+        self.label_to_color_map = dict(zip(self.color_to_label_map.values(),self.color_to_label_map.keys())) #takes a label and returns a,b
+
+        a_quant = clustered[:,:,0]
+        b_quant = clustered[:,:,1]
+        return a_quant, b_quant
+
+    
 #Make plots to test image loading, Lab conversion, and color channel quantization.
 #Should probably write as a proper unit test and move to a separate file.
 if __name__ == '__main__':
