@@ -291,23 +291,6 @@ class Colorizer(object):
         b_quant = clustered[:,:,1]
         return a_quant, b_quant
 
-    def get_edges(self, img, blur_width=2):
-        img_blurred = cv2.GaussianBlur(img, (0, 0), blur_width)
-        vh = cv2.Sobel(img_blurred, -1, 1, 0)
-        vv = cv2.Sobel(img_blurred, -1, 0, 1)
-        return vv, vh
-
-        # quantization
-        qnt,_ = vq(pixel,centroids)
-
-        # reshape the result of the quantization
-        centers_idx = np.reshape(qnt,(w,h))
-        clustered = centroids[centers_idx]
-
-        a_quant = clustered[:,:,0]
-        b_quant = clustered[:,:,1]
-        return a_quant, b_quant
-
     
 #Make plots to test image loading, Lab conversion, and color channel quantization.
 #Should probably write as a proper unit test and move to a separate file.
