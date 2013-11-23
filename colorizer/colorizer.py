@@ -15,7 +15,7 @@ import scipy.ndimage.filters
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 2
+gridSpacing = 5
 
 NTRAIN = 5000 #number of random pixels to train on
 
@@ -103,7 +103,7 @@ class Colorizer(object):
             a,b = self.posterize_kmeans(a,b,16)
 
             #quantize the a, b components
-            a,b = self.posterize(a,b)
+            #a,b = self.posterize(a,b)
 
             #dimensions of image
             m,n = l.shape 
@@ -286,6 +286,10 @@ class Colorizer(object):
         # reshape the result of the quantization
         centers_idx = np.reshape(qnt,(w,h))
         clustered = centroids[centers_idx]
+
+        #color-mapping lookup tables
+        self.color_to_label_map = {c:i for i,c in enumerate([tuple(i) for i in centroids])} #this maps the color pair to the index of the color
+        self.label_to_color_map = dict(zip(self.color_to_label_map.values(),self.color_to_label_map.keys())) #takes a label and returns a,b
 
         a_quant = clustered[:,:,0]
         b_quant = clustered[:,:,1]
