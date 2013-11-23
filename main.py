@@ -48,7 +48,7 @@ if __name__ == '__main__':
     grayscale_image = get_grayscale_from_color(input_file)
 
     #colorize the input image
-    colorized_image = c.colorize(grayscale_image,skip=2)
+    colorized_image = c.colorize(grayscale_image,skip=4)
 
     #save the outputs
     cv2.imwrite('output_gray.jpg', grayscale_image)
