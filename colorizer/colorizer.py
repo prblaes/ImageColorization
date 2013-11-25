@@ -124,8 +124,8 @@ class Colorizer(object):
                     numTrainingExamples = numTrainingExamples + 1
 
         # normalize columns
-        features = self.scaler.fit_transform(np.array(features))
-        print features
+        self.features = self.scaler.fit_transform(np.array(features))
+
 #        features = np.array(features)
         classes = np.array(classes)
 
@@ -137,7 +137,7 @@ class Colorizer(object):
                 if len(np.where(classes==i)[0])>0:
                     curr_class = (classes==i).astype(np.int32)
                     self.colors_present.append(i)
-                    self.svm[i].fit(features,(classes==i).astype(np.int32))
+                    self.svm[i].fit(self.features,(classes==i).astype(np.int32))
 
         except Exception, e:
             pdb.set_trace()
@@ -148,6 +148,9 @@ class Colorizer(object):
         #print "Number of support vectors: ", self.svm.n_support_
         #pdb.set_trace()
         print('')
+
+    def extract_gradient(self, a, b, pos):
+        pass
         
     def getMean(self, img, pos):
         ''' 
@@ -264,13 +267,13 @@ class Colorizer(object):
         return a_quant, b_quant
 
     
-    def get_edges(self, img, blur_width=1):
+    def get_edges(self, img, blur_width=3):
         img_blurred = cv2.GaussianBlur(img, (0, 0), blur_width)
         vh = cv2.Sobel(img_blurred, -1, 1, 0)
         vv = cv2.Sobel(img_blurred, -1, 0, 1)
 
-        vh = -vh/np.max(vh)
-        vv = -vv/np.max(vv)
+        #vh = vh/np.max(vh)
+        #vv = vv/np.max(vv)
 
         return vv, vh
 
@@ -287,19 +290,27 @@ class Colorizer(object):
                 c1 = np.array(self.label_to_color_map[ii])
                 c2 = np.array(self.label_to_color_map[jj])
                 pairwise_costs[ii,jj] = np.linalg.norm(c1-c2)
-                sys.stdout.write('%d\t'%int(pairwise_costs[ii,jj]))
-            sys.stdout.write('\n')
         
         #get edge weights
         vv, vh = self.get_edges(img)
 
-        label_costs_int32 = (10*label_costs).astype('int32')
-        pairwise_costs_int32 = (1000*pairwise_costs).astype('int32')
-        vv_int32 = (1/vv).astype('int32')
-        vh_int32 = (1/vh).astype('int32')
+        label_costs_int32 = (1000*label_costs).astype('int32')
+        pairwise_costs_int32 = (10*pairwise_costs).astype('int32')
+        vv_int32 = (vv).astype('int32')
+        vh_int32 = (vh).astype('int32')
+
+        cv2.imshow('vv',vv)
+        cv2.imshow('vh', vh)
+
+        #print('lable_costs: ')
+        #print(label_costs[0:10, 0:10])
+
+        #print('pairwise_costs: ')
+        #print(pairwise_costs_int32[0:10, 0:10])
+
 
         #perform graphcut optimization
-        new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=1) 
+        new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=1, algorithm='swap') 
 
         return new_labels
         
