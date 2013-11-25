@@ -49,7 +49,7 @@ if __name__ == '__main__':
     grayscale_image = get_grayscale_from_color(input_file)
 
     #colorize the input image
-    colorized_image = c.colorize(grayscale_image,skip=8)
+    colorized_image, gv, gh = c.colorize(grayscale_image,skip=16)
 
     #save the outputs
     cv2.imwrite('output_gray.jpg', grayscale_image)
@@ -83,7 +83,20 @@ if __name__ == '__main__':
     ax4.imshow(cv2.cvtColor(newColorMap,cv.CV_Lab2RGB))
     ax4.set_axis_off()
     ax4.set_title('New colormap')
+
     plt.savefig('/shared/users/prblaes/ImageColorization/output_figure4.png')
+
+    plt.figure(2)
+    ax1 = fig.add_subplot(1,2,1)
+    ax1.imshow(gv, cmap='gray')
+    ax1.set_axis_off()
+    ax1.set_title('gv')
+
+    ax2 = fig.add_subplot(1,2,2)
+    ax2.imshow(gh, cmap='gray')
+    ax2.set_axis_off()
+    ax2.set_title('gh')
+
     plt.show()
 
 

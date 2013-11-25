@@ -16,7 +16,7 @@ import scipy.ndimage.filters
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 5
+gridSpacing = 7
 
 NTRAIN = 5000 #number of random pixels to train on
 
@@ -97,11 +97,15 @@ class Colorizer(object):
         '''
 
         features = []
+        self.local_grads_v = []
+        self.local_grads_h = []
         classes = []
         numTrainingExamples = 0
         for f in files:
 
             l,a,b = self.load_image(f)
+
+            self.compute_gradients(a,b)
 
             a,b = self.posterize_kmeans(a,b,self.ncolors)
 
@@ -120,13 +124,15 @@ class Colorizer(object):
                     
                     features.append(self.get_features(l, (x,y)))
                     classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
+                    
+                    #save vertical/horizontal color gradients at training feature locations
+                    self.local_grads_v.append(self.gradv[y,x])
+                    self.local_grads_h.append(self.gradh[y,x])
 
                     numTrainingExamples = numTrainingExamples + 1
 
         # normalize columns
         self.features = self.scaler.fit_transform(np.array(features))
-
-#        features = np.array(features)
         classes = np.array(classes)
 
         #train the classifiers
@@ -149,8 +155,41 @@ class Colorizer(object):
         #pdb.set_trace()
         print('')
 
-    def extract_gradient(self, a, b, pos):
-        pass
+    def compute_gradients(self, a, b):
+        grad_a_horiz = cv2.Sobel(a, -1, 1, 0)
+        grad_a_vert = cv2.Sobel(a, -1, 0, 1)
+        
+        grad_b_horiz = cv2.Sobel(b, -1, 1, 0)
+        grad_b_vert = cv2.Sobel(b, -1, 0, 1)
+
+        self.gradv = np.sqrt(grad_a_vert**2 + grad_b_vert**2) #vertical grad magnitude
+        self.gradh = np.sqrt(grad_a_horiz**2 + grad_b_horiz**2) #horizontal grad magnitude
+
+
+    def color_variation(self, feat, sigma=2):
+        m,n = self.features.shape
+        
+        #exponential kernel function
+        def k(w,v):
+            return np.exp(-1*np.linalg.norm(w - v)**2 / (2*sigma**2))
+        
+        gv_num=0
+        gh_num=0
+
+        gv_den=0
+        gh_den=0
+        for i in range(m):
+            x = k(self.features[i,:], feat)
+            gv_num += x * self.local_grads_v[i]
+            gv_den += x
+
+            gh_num += x * self.local_grads_v[i]
+            gh_den += x
+        
+        gv = gv_num / gv_den
+        gh = gh_num / gh_den
+
+        return gv, gh
         
     def getMean(self, img, pos):
         ''' 
@@ -179,7 +218,7 @@ class Colorizer(object):
         lap = scipy.ndimage.filters.laplace(img[ylim[0]:ylim[1],xlim[0]:xlim[1]])
         return np.ravel(lap)
 
-
+        
 
     def colorize(self, img, skip=1):
         '''
@@ -200,6 +239,9 @@ class Colorizer(object):
 
         num_classes = len(self.colors_present)
         label_costs = np.zeros((m,n,num_classes))
+
+        gv = np.zeros(raw_output_a.shape)
+        gh = np.zeros(raw_output_a.shape)
         
         count=0
         for x in xrange(0,n,skip):
@@ -210,6 +252,10 @@ class Colorizer(object):
                 sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 sys.stdout.flush()
                 count += 1
+                
+                gv_temp, gh_temp = self.color_variation(feat)
+                gv[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = gv_temp
+                gh[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = gh_temp
 
                 #get margins to estimate confidence for each class
                 for i in range(num_classes):
@@ -228,7 +274,7 @@ class Colorizer(object):
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
         print('\nclassified %d%%\n'% np.max([100,(100*num_classified*(skip**2)/(m*n))]))
 
-        return output_img
+        return output_img, gv, gh
 
 
     def load_image(self, path):
@@ -298,9 +344,6 @@ class Colorizer(object):
         pairwise_costs_int32 = (10*pairwise_costs).astype('int32')
         vv_int32 = (vv).astype('int32')
         vh_int32 = (vh).astype('int32')
-
-        cv2.imshow('vv',vv)
-        cv2.imshow('vh', vh)
 
         #print('lable_costs: ')
         #print(label_costs[0:10, 0:10])
