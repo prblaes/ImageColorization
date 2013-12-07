@@ -57,10 +57,23 @@ if __name__ == '__main__':
     cv2.imwrite('output_gray.jpg', grayscale_image)
     cv2.imwrite('output_color.jpg', cv2.cvtColor(colorized_image, cv.CV_RGB2BGR))
 
-
+    # prep new color map:
     l, a, b = cv2.split(cv2.cvtColor(colorized_image, cv.CV_RGB2Lab))
     newColorMap = cv2.merge((128*np.uint8(np.ones(np.shape(l))),a,b))
 
+    # compute prediction error:
+    l_target, a_target, b_target = cv2.split(cv2.cvtColor(cv2.imread(input_file), cv.CV_BGR2Lab))
+    a_target, b_target = c.posterize_external_image(a_target,b_target)      # quantized true-color image
+    targetColorMap = cv2.merge((128*np.uint8(np.ones(np.shape(l_target))),a_target,b_target))
+    targetQuant = cv2.merge((l_target,a_target,b_target))   
+
+    a_err = pow(a - a_target,2)
+    b_err = pow(b - b_target,2)
+
+    errMap = a_err + b_err                          # error heatmap
+    totalErr = sqrt(sum(a_err)) + sqrt(sum(b_err))  # total error metric
+
+    print('Total Error (2-norm) = %f',totalErr)
 
     #now, display the original image, the BW image, and our colorized version
     fig = plt.figure(1)
@@ -70,15 +83,15 @@ if __name__ == '__main__':
     ax1.set_axis_off()
     ax1.set_title('Training Image')
 
-    ax3 = fig.add_subplot(2, 3, 2)
-    ax3.imshow(grayscale_image, cmap='gray')
-    ax3.set_axis_off()
-    ax3.set_title('Grayscale')
+    ax2 = fig.add_subplot(2, 3, 2)
+    ax2.imshow(grayscale_image, cmap='gray')
+    ax2.set_axis_off()
+    ax2.set_title('Grayscale')
 
-    ax4 = fig.add_subplot(2, 3, 3)
-    ax4.imshow(colorized_image)
-    ax4.set_axis_off()
-    ax4.set_title('Colorized')
+    ax3 = fig.add_subplot(2, 3, 3)
+    ax3.imshow(colorized_image)
+    ax3.set_axis_off()
+    ax3.set_title('Colorized')
 
 
     ax4 = fig.add_subplot(2, 3, 4)
@@ -93,6 +106,11 @@ if __name__ == '__main__':
     ax5.imshow(g, cmap='gray')
     ax5.set_axis_off()
     ax5.set_title('Color Variation')
+
+    ax6 = fig.add_subplot(2,3,6)
+    ax6.imshow(errMap, cmap='gray')
+    ax6.set_axis_off()
+    ax6.set_title('Prediction Error')
 
 
 #    plt.savefig('ImageColorization/output_figure4.png')
