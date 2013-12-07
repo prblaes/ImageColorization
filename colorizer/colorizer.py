@@ -13,13 +13,16 @@ from gco_python import pygco
 from scipy.cluster.vq import kmeans,vq
 from sklearn.decomposition import PCA
 import scipy.ndimage.filters
+import pickle
 
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
 gridSpacing = 7
 
-NTRAIN = 5000 #number of random pixels to train on
+SAVE_OUTPUTS = True
+
+NTRAIN = 1000 #number of random pixels to train on
 
 NPCA = 30 # size of the reduced 
 
@@ -102,8 +105,7 @@ class Colorizer(object):
         '''
 
         features = []
-        self.local_grads_v = []
-        self.local_grads_h = []
+        self.local_grads = []
         classes = []
         numTrainingExamples = 0
         for f in files:
@@ -120,21 +122,27 @@ class Colorizer(object):
             #dimensions of image
             m,n = l.shape 
 
+
             #extract features from training image
             # (Select uniformly-spaced training pixels)
-            for x in xrange(int(gridSpacing/2),n,gridSpacing):
-                for y in xrange(int(gridSpacing/2),m,gridSpacing):
-                    sys.stdout.write('\rgenerating feature: %3.0f'%(numTrainingExamples))
-                    sys.stdout.flush()
-                    
-                    features.append(self.get_features(l, (x,y)))
-                    classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
-                    
-                    #save vertical/horizontal color gradients at training feature locations
-                    self.local_grads_v.append(self.gradv[y,x])
-                    self.local_grads_h.append(self.gradh[y,x])
+            #for x in xrange(int(gridSpacing/2),n,gridSpacing):
+            #    for y in xrange(int(gridSpacing/2),m,gridSpacing):
+            #extract features from training image
+            for i in xrange(NTRAIN):
+                #choose random pixel in training image
+                x = int(np.random.uniform(n))
+                y = int(np.random.uniform(m))
 
-                    numTrainingExamples = numTrainingExamples + 1
+                sys.stdout.write('\rgenerating feature: %3.0f'%(numTrainingExamples))
+                sys.stdout.flush()
+                    
+                features.append(self.get_features(l, (x,y)))
+                classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
+                    
+                #save vertical/horizontal color gradients at training feature locations
+                self.local_grads.append(self.grad[y,x])
+
+                numTrainingExamples = numTrainingExamples + 1
 
         # normalize columns
         self.features = self.scaler.fit_transform(np.array(features))
@@ -166,12 +174,18 @@ class Colorizer(object):
     def compute_gradients(self, a, b):
         grad_a_horiz = cv2.Sobel(a, -1, 1, 0)
         grad_a_vert = cv2.Sobel(a, -1, 0, 1)
+
+        grad_a = 0.5*grad_a_horiz + 0.5*grad_a_vert
         
         grad_b_horiz = cv2.Sobel(b, -1, 1, 0)
         grad_b_vert = cv2.Sobel(b, -1, 0, 1)
 
-        self.gradv = np.sqrt(grad_a_vert**2 + grad_b_vert**2) #vertical grad magnitude
-        self.gradh = np.sqrt(grad_a_horiz**2 + grad_b_horiz**2) #horizontal grad magnitude
+        grad_b = 0.5*grad_b_horiz + 0.5*grad_b_vert
+
+        #self.gradv = np.sqrt(grad_a_vert**2 + grad_b_vert**2) #vertical grad magnitude
+        #self.gradh = np.sqrt(grad_a_horiz**2 + grad_b_horiz**2) #horizontal grad magnitude
+
+        self.grad = np.sqrt(grad_a**2 + grad_b**2)
 
 
     def color_variation(self, feat, sigma=2):
@@ -181,23 +195,19 @@ class Colorizer(object):
         def k(w,v):
             return np.exp(-1*np.linalg.norm(w - v)**2 / (2*sigma**2))
         
-        gv_num=0
-        gh_num=0
+        g_num=0
 
-        gv_den=0
-        gh_den=0
-        for i in range(m):
+        g_den=0
+
+        #only use every 4 features for this KDE. Very slow otherwise...
+        for i in range(1, m, 4):
             x = k(self.features[i,:], feat)
-            gv_num += x * self.local_grads_v[i]
-            gv_den += x
+            g_num += x * self.local_grads[i]
+            g_den += x
 
-            gh_num += x * self.local_grads_v[i]
-            gh_den += x
-        
-        gv = gv_num / gv_den
-        gh = gh_num / gh_den
+        g = g_num / g_den
 
-        return gv, gh
+        return g
         
     def getMean(self, img, pos):
         ''' 
@@ -228,7 +238,7 @@ class Colorizer(object):
 
         
 
-    def colorize(self, img, skip=1):
+    def colorize(self, img, skip=4):
         '''
         -- colorizes a grayscale image, using the set of SVMs defined by train().
 
@@ -248,8 +258,7 @@ class Colorizer(object):
         num_classes = len(self.colors_present)
         label_costs = np.zeros((m,n,num_classes))
 
-        gv = np.zeros(raw_output_a.shape)
-        gh = np.zeros(raw_output_a.shape)
+        self.g = np.zeros(raw_output_a.shape)
         
         count=0
         for x in xrange(0,n,skip):
@@ -262,17 +271,24 @@ class Colorizer(object):
                 sys.stdout.flush()
                 count += 1
                 
-                gv_temp, gh_temp = self.color_variation(feat)
-                gv[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = gv_temp
-                gh[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = gh_temp
+                self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
 
                 #get margins to estimate confidence for each class
                 for i in range(num_classes):
                     cost = -1*self.svm[self.colors_present[i]].decision_function(feat)[0]
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
+        self.g = np.log10(self.g)
+      
+        if SAVE_OUTPUTS:
+            #dump to pickle
+            print('saving to dump.dat')
+            fid = open('dump.dat', 'wb') 
+            pickle.dump({'S': label_costs, 'g': self.g, 'cmap': self.label_to_color_map, 'colors': self.colors_present}, fid)
+            fid.close()
+
         #postprocess using graphcut optimization 
-        output_labels = self.graphcut(img, label_costs)
+        output_labels = self.graphcut(label_costs)
         
         for i in range(m):
             for j in range(n):
@@ -283,7 +299,7 @@ class Colorizer(object):
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
         print('\nclassified %d%%\n'% np.max([100,(100*num_classified*(skip**2)/(m*n))]))
 
-        return output_img, gv, gh
+        return output_img, self.g
 
 
     def load_image(self, path):
@@ -332,37 +348,27 @@ class Colorizer(object):
 
         return vv, vh
 
-    def graphcut(self, img, label_costs):
+    def graphcut(self, label_costs, l=100):
 
         num_classes = len(self.colors_present)
         
         #calculate pariwise potiential costs (distance between color classes)
-        #pairwise_costs = 50*(np.ones((num_classes, num_classes)) - np.eye(num_classes))
         pairwise_costs = np.zeros((num_classes, num_classes))
-        sys.stdout.write('\n')
         for ii in range(num_classes):
             for jj in range(num_classes):
                 c1 = np.array(self.label_to_color_map[ii])
                 c2 = np.array(self.label_to_color_map[jj])
                 pairwise_costs[ii,jj] = np.linalg.norm(c1-c2)
         
-        #get edge weights
-        vv, vh = self.get_edges(img)
-
-        label_costs_int32 = (1000*label_costs).astype('int32')
-        pairwise_costs_int32 = (10*pairwise_costs).astype('int32')
-        vv_int32 = (vv).astype('int32')
-        vh_int32 = (vh).astype('int32')
-
-        #print('lable_costs: ')
-        #print(label_costs[0:10, 0:10])
-
-        #print('pairwise_costs: ')
-        #print(pairwise_costs_int32[0:10, 0:10])
-
-
+        label_costs_int32 = (100*label_costs).astype('int32')
+        pairwise_costs_int32 = (l*pairwise_costs).astype('int32')
+        vv_int32 = (1/self.g).astype('int32')
+        vh_int32 = (1/self.g).astype('int32')
+        
         #perform graphcut optimization
-        new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=1, algorithm='swap') 
+        new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=10, algorithm='swap') 
+
+        #new_labels = pygco.cut_simple(label_costs_int32, pairwise_costs_int32, algorithm='swap')
 
         return new_labels
         
@@ -391,6 +397,22 @@ class Colorizer(object):
         b_quant = clustered[:,:,1]
         return a_quant, b_quant
 
+    def posterize_external_image(self, a,b):
+        w,h = np.shape(a)
+        
+        # reshape matrix
+        pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
+
+        # quantization
+        qnt,_ = vq(pixel,centroids)
+
+        # reshape the result of the quantization
+        centers_idx = np.reshape(qnt,(w,h))
+        clustered = centroids[centers_idx]
+
+        a_quant = clustered[:,:,0]
+        b_quant = clustered[:,:,1]
+        return a_quant, b_quant
     
 #Make plots to test image loading, Lab conversion, and color channel quantization.
 #Should probably write as a proper unit test and move to a separate file.
