@@ -60,9 +60,14 @@ class Colorizer(object):
         Gets the SURF descriptor of img at pos = (x,y).
         Assume img is a single channel image.
         '''
+        octave2 = cv2.GaussianBlur(img, (0, 0), 1)
+        octave3 = cv2.GaussianBlur(img, (0, 0), 2)
         kp = cv2.KeyPoint(pos[0], pos[1], SURF_WINDOW)
-        _, des = self.surf.compute(img, [kp])
-        return des[0]
+        _, des1 = self.surf.compute(img, [kp])
+        _, des2 = self.surf.compute(octave2, [kp])
+        _, des3 = self.surf.compute(octave3, [kp])
+
+        return np.concatenate((des1[0], des2[0], des3[0]))
 
     def feature_dct(self, img, pos):
         pass
@@ -272,14 +277,14 @@ class Colorizer(object):
                 sys.stdout.flush()
                 count += 1
                 
-                self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
+                #self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
 
                 #get margins to estimate confidence for each class
                 for i in range(num_classes):
                     cost = -1*self.svm[self.colors_present[i]].decision_function(feat)[0]
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
-        self.g = np.log10(self.g)
+        self.g = self.get_edges(img)#np.log10(self.g)
       
         if SAVE_OUTPUTS:
             #dump to pickle
@@ -344,8 +349,8 @@ class Colorizer(object):
         vh = cv2.Sobel(img_blurred, -1, 1, 0)
         vv = cv2.Sobel(img_blurred, -1, 0, 1)
 
-        #vh = vh/np.max(vh)
-        #vv = vv/np.max(vv)
+        vh = vh/np.max(vh)
+        vv = vv/np.max(vv)
 
         return vv, vh
 
