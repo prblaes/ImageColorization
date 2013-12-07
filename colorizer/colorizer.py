@@ -69,9 +69,9 @@ class Colorizer(object):
 
         return np.concatenate((des1[0], des2[0], des3[0]))
 
-    def feature_dct(self, img, pos):
-        pass
-
+    def feature_dft(self, img, pos):
+        x = 1
+   
     def feature_position(self, img, pos):
         m,n = img.shape
         x_pos = pos[0]/n
@@ -264,7 +264,7 @@ class Colorizer(object):
         num_classes = len(self.colors_present)
         label_costs = np.zeros((m,n,num_classes))
 
-        self.g = np.zeros(raw_output_a.shape)
+        #self.g = np.zeros(raw_output_a.shape)
         
         count=0
         for x in xrange(0,n,skip):
@@ -284,7 +284,9 @@ class Colorizer(object):
                     cost = -1*self.svm[self.colors_present[i]].decision_function(feat)[0]
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
-        self.g = self.get_edges(img)#np.log10(self.g)
+        edges = self.get_edges(img)
+        self.g = np.sqrt(edges[0]**2 + edges[1]**2)
+        self.g = np.log10(self.g)
       
         if SAVE_OUTPUTS:
             #dump to pickle
