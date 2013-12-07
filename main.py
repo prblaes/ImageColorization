@@ -21,12 +21,12 @@ if __name__ == '__main__':
     #cs_229_project Dropbox foler that Rasoul shared
 
 
-    #training_files = ['images/houses/calhouse_0001.jpg' ]
-    #input_file = 'images/houses/calhouse_0002.jpg'
+    training_files = ['images/houses/calhouse_0001.jpg' ]
+    input_file = 'images/houses/calhouse_0007.jpg'
 
 
-    training_files = ['images/book_chapter/islande.jpg' ]
-    input_file = 'images/book_chapter/paysage_gris.png'
+    #training_files = ['images/book_chapter/islande.jpg' ]
+    #input_file = 'images/book_chapter/paysage_gris.png'
 
     #training_files = ['test/jp.jpg' ]
     #input_file = 'test/chris.jpg'
@@ -49,7 +49,9 @@ if __name__ == '__main__':
     grayscale_image = get_grayscale_from_color(input_file)
 
     #colorize the input image
-    colorized_image, gv, gh = c.colorize(grayscale_image,skip=16)
+    colorized_image, g = c.colorize(grayscale_image,skip=1)
+
+    print('min g = %f, max g = %f'%(np.min(g), np.max(g)))
 
     #save the outputs
     cv2.imwrite('output_gray.jpg', grayscale_image)
@@ -63,40 +65,34 @@ if __name__ == '__main__':
     #now, display the original image, the BW image, and our colorized version
     fig = plt.figure(1)
 
-    ax1 = fig.add_subplot(2, 2, 1)
+    ax1 = fig.add_subplot(2, 3, 1)
     ax1.imshow(cv2.cvtColor(cv2.imread(training_files[0]), cv.CV_BGR2RGB))
     ax1.set_axis_off()
     ax1.set_title('Training Image')
 
-    ax3 = fig.add_subplot(2, 2, 2)
+    ax3 = fig.add_subplot(2, 3, 2)
     ax3.imshow(grayscale_image, cmap='gray')
     ax3.set_axis_off()
     ax3.set_title('Grayscale')
 
-    ax4 = fig.add_subplot(2, 2, 3)
+    ax4 = fig.add_subplot(2, 3, 3)
     ax4.imshow(colorized_image)
     ax4.set_axis_off()
     ax4.set_title('Colorized')
 
 
-    ax4 = fig.add_subplot(2, 2, 4)
+    ax4 = fig.add_subplot(2, 3, 4)
     ax4.imshow(cv2.cvtColor(newColorMap,cv.CV_Lab2RGB))
     ax4.set_axis_off()
     ax4.set_title('New colormap')
 
+
+    ax5 = fig.add_subplot(2,3,5)
+    ax5.imshow(g, cmap='gray')
+    ax5.set_axis_off()
+    ax5.set_title('Color Variation')
+
     plt.savefig('/shared/users/prblaes/ImageColorization/output_figure4.png')
-
-    plt.figure(2)
-    ax1 = fig.add_subplot(1,2,1)
-    ax1.imshow(gv, cmap='gray')
-    ax1.set_axis_off()
-    ax1.set_title('gv')
-
-    ax2 = fig.add_subplot(1,2,2)
-    ax2.imshow(gh, cmap='gray')
-    ax2.set_axis_off()
-    ax2.set_title('gh')
-
     plt.show()
 
 
