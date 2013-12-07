@@ -22,7 +22,7 @@ gridSpacing = 7
 
 SAVE_OUTPUTS = True
 
-NTRAIN = 1000 #number of random pixels to train on
+NTRAIN = 5000 #number of random pixels to train on
 
 NPCA = 30 # size of the reduced 
 

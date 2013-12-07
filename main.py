@@ -71,9 +71,10 @@ if __name__ == '__main__':
     b_err = pow(b - b_target,2)
 
     errMap = a_err + b_err                          # error heatmap
-    totalErr = sqrt(sum(a_err)) + sqrt(sum(b_err))  # total error metric
+    avgError = (np.sqrt(np.sum(a_err)) + np.sqrt(np.sum(b_err)))/(a_err.shape[0] * a_err.shape[1])  # total error metric
 
-    print('Total Error (2-norm) = %f',totalErr)
+    print ('Average Error (2-norm) = %f'%avgError)
+    print ('Maximum Error = %f'%max(errMap.flatten()))
 
     #now, display the original image, the BW image, and our colorized version
     fig = plt.figure(1)
