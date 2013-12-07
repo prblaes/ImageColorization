@@ -86,14 +86,16 @@ if __name__ == '__main__':
     ax4.set_axis_off()
     ax4.set_title('New colormap')
 
+    # plt.savefig('/shared/users/asousa/ImageColorization/output_figure4.png')
+
 
     ax5 = fig.add_subplot(2,3,5)
     ax5.imshow(g, cmap='gray')
     ax5.set_axis_off()
     ax5.set_title('Color Variation')
 
-    plt.savefig('/shared/users/prblaes/ImageColorization/output_figure4.png')
-    plt.show()
 
+#    plt.savefig('ImageColorization/output_figure4.png')
+    plt.show()
 
    

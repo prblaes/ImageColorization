@@ -11,17 +11,20 @@ import pdb
 from scipy.fftpack import dct
 from gco_python import pygco
 from scipy.cluster.vq import kmeans,vq
+from sklearn.decomposition import PCA
 import scipy.ndimage.filters
 import pickle
 
 SURF_WINDOW = 20
 DCT_WINDOW = 20
 windowSize = 10
-gridSpacing = 4
+gridSpacing = 7
 
 SAVE_OUTPUTS = True
 
-NTRAIN = 5000 #number of random pixels to train on
+NTRAIN = 1000 #number of random pixels to train on
+
+NPCA = 30 # size of the reduced 
 
 class Colorizer(object):
     '''
@@ -44,6 +47,8 @@ class Colorizer(object):
 
         self.scaler = preprocessing.MinMaxScaler()                          # Scaling object -- Normalizes feature array
         
+        self.pca = PCA(NPCA)
+
         self.probability = probability
         self.colors_present = []
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -122,24 +127,34 @@ class Colorizer(object):
             #dimensions of image
             m,n = l.shape 
 
+
             #extract features from training image
             # (Select uniformly-spaced training pixels)
-            for x in xrange(int(gridSpacing/2),n,gridSpacing):
-                for y in xrange(int(gridSpacing/2),m,gridSpacing):
-                    sys.stdout.write('\rgenerating feature: %3.0f'%(numTrainingExamples))
-                    sys.stdout.flush()
-                    
-                    features.append(self.get_features(l, (x,y)))
-                    classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
-                    
-                    #save vertical/horizontal color gradients at training feature locations
-                    self.local_grads.append(self.grad[y,x])
+            #for x in xrange(int(gridSpacing/2),n,gridSpacing):
+            #    for y in xrange(int(gridSpacing/2),m,gridSpacing):
+            #extract features from training image
+            for i in xrange(NTRAIN):
+                #choose random pixel in training image
+                x = int(np.random.uniform(n))
+                y = int(np.random.uniform(m))
 
-                    numTrainingExamples = numTrainingExamples + 1
+                sys.stdout.write('\rgenerating feature: %3.0f'%(numTrainingExamples))
+                sys.stdout.flush()
+                    
+                features.append(self.get_features(l, (x,y)))
+                classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
+                    
+                #save vertical/horizontal color gradients at training feature locations
+                self.local_grads.append(self.grad[y,x])
+
+                numTrainingExamples = numTrainingExamples + 1
 
         # normalize columns
         self.features = self.scaler.fit_transform(np.array(features))
         classes = np.array(classes)
+
+        # reduce dimensionality
+        self.features = self.pca.fit_transform(self.features)
 
         #train the classifiers
         print " "
@@ -228,7 +243,7 @@ class Colorizer(object):
 
         
 
-    def colorize(self, img, skip=1):
+    def colorize(self, img, skip=4):
         '''
         -- colorizes a grayscale image, using the set of SVMs defined by train().
 
@@ -255,6 +270,7 @@ class Colorizer(object):
             for y in xrange(0,m,skip):
 
                 feat = self.scaler.transform(self.get_features(img, (x,y)))
+                feat = self.pca.transform(feat)
 
                 sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 sys.stdout.flush()
@@ -386,6 +402,22 @@ class Colorizer(object):
         b_quant = clustered[:,:,1]
         return a_quant, b_quant
 
+    def posterize_external_image(self, a,b):
+        w,h = np.shape(a)
+        
+        # reshape matrix
+        pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
+
+        # quantization
+        qnt,_ = vq(pixel,centroids)
+
+        # reshape the result of the quantization
+        centers_idx = np.reshape(qnt,(w,h))
+        clustered = centroids[centers_idx]
+
+        a_quant = clustered[:,:,0]
+        b_quant = clustered[:,:,1]
+        return a_quant, b_quant
     
 #Make plots to test image loading, Lab conversion, and color channel quantization.
 #Should probably write as a proper unit test and move to a separate file.
