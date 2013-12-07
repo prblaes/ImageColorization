@@ -11,6 +11,7 @@ import pdb
 from scipy.fftpack import dct
 from gco_python import pygco
 from scipy.cluster.vq import kmeans,vq
+from sklearn.decomposition import PCA
 import scipy.ndimage.filters
 
 SURF_WINDOW = 20
@@ -19,6 +20,8 @@ windowSize = 10
 gridSpacing = 7
 
 NTRAIN = 5000 #number of random pixels to train on
+
+NPCA = 30 # size of the reduced 
 
 class Colorizer(object):
     '''
@@ -41,6 +44,8 @@ class Colorizer(object):
 
         self.scaler = preprocessing.MinMaxScaler()                          # Scaling object -- Normalizes feature array
         
+        self.pca = PCA(NPCA)
+
         self.probability = probability
         self.colors_present = []
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -134,6 +139,9 @@ class Colorizer(object):
         # normalize columns
         self.features = self.scaler.fit_transform(np.array(features))
         classes = np.array(classes)
+
+        # reduce dimensionality
+        self.features = self.pca.fit_transform(self.features)
 
         #train the classifiers
         print " "
@@ -248,6 +256,7 @@ class Colorizer(object):
             for y in xrange(0,m,skip):
 
                 feat = self.scaler.transform(self.get_features(img, (x,y)))
+                feat = self.pca.transform(feat)
 
                 sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 sys.stdout.flush()

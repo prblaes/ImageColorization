@@ -84,7 +84,7 @@ if __name__ == '__main__':
     ax4.set_axis_off()
     ax4.set_title('New colormap')
 
-    plt.savefig('/shared/users/prblaes/ImageColorization/output_figure4.png')
+    # plt.savefig('/shared/users/asousa/ImageColorization/output_figure4.png')
 
     plt.figure(2)
     ax1 = fig.add_subplot(1,2,1)
