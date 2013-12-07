@@ -49,6 +49,7 @@ class Colorizer(object):
         
         self.pca = PCA(NPCA)
 
+        self.centroids = []
         self.probability = probability
         self.colors_present = []
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -380,17 +381,17 @@ class Colorizer(object):
         pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
 
         # cluster
-        centroids,_ = kmeans(pixel,k) # six colors will be found
+        self.centroids,_ = kmeans(pixel,k) # six colors will be found
  
         # quantization
-        qnt,_ = vq(pixel,centroids)
+        qnt,_ = vq(pixel,self.centroids)
 
         # reshape the result of the quantization
         centers_idx = np.reshape(qnt,(w,h))
-        clustered = centroids[centers_idx]
+        clustered = self.centroids[centers_idx]
 
         #color-mapping lookup tables
-        self.color_to_label_map = {c:i for i,c in enumerate([tuple(i) for i in centroids])} #this maps the color pair to the index of the color
+        self.color_to_label_map = {c:i for i,c in enumerate([tuple(i) for i in self.centroids])} #this maps the color pair to the index of the color
         self.label_to_color_map = dict(zip(self.color_to_label_map.values(),self.color_to_label_map.keys())) #takes a label and returns a,b
 
         a_quant = clustered[:,:,0]
@@ -404,11 +405,11 @@ class Colorizer(object):
         pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
 
         # quantization
-        qnt,_ = vq(pixel,centroids)
+        qnt,_ = vq(pixel,self.centroids)
 
         # reshape the result of the quantization
         centers_idx = np.reshape(qnt,(w,h))
-        clustered = centroids[centers_idx]
+        clustered = self.centroids[centers_idx]
 
         a_quant = clustered[:,:,0]
         b_quant = clustered[:,:,1]
