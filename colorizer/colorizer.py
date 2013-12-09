@@ -20,9 +20,9 @@ DCT_WINDOW = 20
 windowSize = 10
 gridSpacing = 7
 
-SAVE_OUTPUTS = True
-
-NTRAIN = 1000 #number of random pixels to train on
+SAVE_OUTPUTS = False
+#
+NTRAIN = 5000 #number of random pixels to train on
 
 NPCA = 30 # size of the reduced 
 
@@ -31,7 +31,7 @@ class Colorizer(object):
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=16, random=False, probability=False):
+    def __init__(self, ncolors=16, probability=False, npca=30, svmgamma=0.1, svmC=1, graphcut_lambda=1):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -43,16 +43,18 @@ class Colorizer(object):
 
         # declare classifiers
         #self.svm = SVC(probability=probability, gamma=0.1)
-        self.svm = [SVC(probability=probability, gamma=0.1) for i in range(self.ncolors)]
+        self.svm = [SVC(probability=probability, gamma=svmgamma, C=svmC) for i in range(self.ncolors)]
 
         self.scaler = preprocessing.MinMaxScaler()                          # Scaling object -- Normalizes feature array
         
-        self.pca = PCA(NPCA)
+        self.pca = PCA(npca)
 
         self.probability = probability
         self.colors_present = []
         self.surf = cv2.DescriptorExtractor_create('SURF')
         self.surf.setBool('extended', True) #use the 128-length descriptors
+
+        self.graphcut_lambda=graphcut_lambda
 
     def feature_surf(self, img, pos):
         '''
@@ -69,8 +71,19 @@ class Colorizer(object):
         return np.concatenate((des1[0], des2[0], des3[0]))
 
     def feature_dft(self, img, pos):
-        x = 1
-   
+        xlim = (max(pos[0] - windowSize,0), min(pos[0] + windowSize,img.shape[1]))
+        ylim = (max(pos[1] - windowSize,0), min(pos[1] + windowSize,img.shape[0]))
+        patch = img[ylim[0]:ylim[1],xlim[0]:xlim[1]]
+        
+        l = (2*windowSize + 1)**2
+
+        #return all zeros for now if we're at the edge
+        if patch.shape[0]*patch.shape[1] != l:
+            return np.zeros(l)
+
+        return np.abs(np.fft(patch.flatten()))
+
+
     def feature_position(self, img, pos):
         m,n = img.shape
         x_pos = pos[0]/n
@@ -93,7 +106,7 @@ class Colorizer(object):
         #laplacian = self.getLaplacian(img,pos)
 #        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
         #feat = np.concatenate((meanvar, self.feature_surf(img, pos)))
-        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
+        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos), self.feature_dft(img, pos)))
         #print feat
         return feat
 
@@ -138,8 +151,8 @@ class Colorizer(object):
                 x = int(np.random.uniform(n))
                 y = int(np.random.uniform(m))
 
-                sys.stdout.write('\rgenerating feature: %3.0f'%(numTrainingExamples))
-                sys.stdout.flush()
+                #sys.stdout.write('\rgenerating feature: %3.0f'%(numTrainingExamples))
+                #sys.stdout.flush()
                     
                 features.append(self.get_features(l, (x,y)))
                 classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
@@ -157,8 +170,8 @@ class Colorizer(object):
         self.features = self.pca.fit_transform(self.features)
 
         #train the classifiers
-        print " "
-        print "Training SVM" 
+        #print " "
+        #print "Training SVM" 
         try: 
             for i in range(self.ncolors):
                 if len(np.where(classes==i)[0])>0:
@@ -170,11 +183,13 @@ class Colorizer(object):
             pdb.set_trace()
 
             
-        print " "
+        #print " "
         # print the number of support vectors for each class
         #print "Number of support vectors: ", self.svm.n_support_
         #pdb.set_trace()
-        print('')
+        #print('')
+
+        return self
 
     def compute_gradients(self, a, b):
         grad_a_horiz = cv2.Sobel(a, -1, 1, 0)
@@ -272,8 +287,8 @@ class Colorizer(object):
                 feat = self.scaler.transform(self.get_features(img, (x,y)))
                 feat = self.pca.transform(feat)
 
-                sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
-                sys.stdout.flush()
+                #sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
+                #sys.stdout.flush()
                 count += 1
                 
                 #self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
@@ -283,9 +298,10 @@ class Colorizer(object):
                     cost = -1*self.svm[self.colors_present[i]].decision_function(feat)[0]
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
-        edges = self.get_edges(img)
-        self.g = np.sqrt(edges[0]**2 + edges[1]**2)
-        self.g = np.log10(self.g)
+        #edges = self.get_edges(img)
+        #self.g = np.sqrt(edges[0]**2 + edges[1]**2)
+        self.g = self.get_edges(img)
+        #self.g = np.log10(self.g)
       
         if SAVE_OUTPUTS:
             #dump to pickle
@@ -295,7 +311,7 @@ class Colorizer(object):
             fid.close()
 
         #postprocess using graphcut optimization 
-        output_labels = self.graphcut(label_costs)
+        output_labels = self.graphcut(label_costs, l=self.graphcut_lambda)
         
         for i in range(m):
             for j in range(n):
@@ -304,7 +320,6 @@ class Colorizer(object):
                 output_b[i,j] = b
 
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
-        print('\nclassified %d%%\n'% np.max([100,(100*num_classified*(skip**2)/(m*n))]))
 
         return output_img, self.g
 
@@ -350,10 +365,12 @@ class Colorizer(object):
         vh = cv2.Sobel(img_blurred, -1, 1, 0)
         vv = cv2.Sobel(img_blurred, -1, 0, 1)
 
-        vh = vh/np.max(vh)
-        vv = vv/np.max(vv)
-
-        return vv, vh
+        #vh = vh/np.max(vh)
+        #vv = vv/np.max(vv)
+        
+        #v = np.sqrt(vv**2 + vh**2)
+        v = 0.5*vv + 0.5*vh
+        return v
 
     def graphcut(self, label_costs, l=100):
 
@@ -369,8 +386,8 @@ class Colorizer(object):
         
         label_costs_int32 = (100*label_costs).astype('int32')
         pairwise_costs_int32 = (l*pairwise_costs).astype('int32')
-        vv_int32 = (1/self.g).astype('int32')
-        vh_int32 = (1/self.g).astype('int32')
+        vv_int32 = (self.g).astype('int32')
+        vh_int32 = (self.g).astype('int32')
         
         #perform graphcut optimization
         new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=10, algorithm='swap') 

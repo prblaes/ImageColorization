@@ -49,5 +49,7 @@ if __name__ == '__main__':
 
         #save the outputs
         cv2.imwrite('output/out%d.jpg'%l, cv2.cvtColor(output_img, cv.CV_RGB2BGR))
-    cv2.imwrite('output/g.jpg', np.uint8(255*d['g']/np.max(d['g'])))
+        #g = np.log(d['g'])
+        g = d['g']
+    cv2.imwrite('output/g.jpg', np.uint8(255*g/np.max(g)))
 
