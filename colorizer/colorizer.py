@@ -24,7 +24,7 @@ SAVE_OUTPUTS = True
 
 NTRAIN = 5000 #number of random pixels to train on
 
-NPCA = 30 # size of the reduced 
+NPCA = 20 # length of the reduced feature vectors
 
 class Colorizer(object):
     '''
@@ -46,7 +46,7 @@ class Colorizer(object):
         self.svm = [SVC(probability=probability, gamma=0.1) for i in range(self.ncolors)]
 
         self.scaler = preprocessing.MinMaxScaler()                          # Scaling object -- Normalizes feature array
-        
+
         self.pca = PCA(NPCA)
 
         self.centroids = []
@@ -119,7 +119,7 @@ class Colorizer(object):
             l,a,b = self.load_image(f)
 
             self.compute_gradients(a,b)
-
+            print "Running K Means" 
             a,b = self.posterize_kmeans(a,b,self.ncolors)
 
             #quantize the a, b components
@@ -154,8 +154,13 @@ class Colorizer(object):
         self.features = self.scaler.fit_transform(np.array(features))
         classes = np.array(classes)
 
+        print "Size, Pre-PCA"
+        print np.shape(self.features)
         # reduce dimensionality
         self.features = self.pca.fit_transform(self.features)
+
+        print "Size, Post-PCA"
+        print np.shape(self.features)
 
         #train the classifiers
         print " "
@@ -264,20 +269,27 @@ class Colorizer(object):
         num_classes = len(self.colors_present)
         label_costs = np.zeros((m,n,num_classes))
 
-        #self.g = np.zeros(raw_output_a.shape)
+        self.g = np.zeros(raw_output_a.shape)
         
         count=0
         for x in xrange(0,n,skip):
             for y in xrange(0,m,skip):
 
                 feat = self.scaler.transform(self.get_features(img, (x,y)))
+                
+                
+                #print "Size, Pre-PCA"
+                #print np.shape(feat)
                 feat = self.pca.transform(feat)
+                #print "size, Post-PCA"
+                #print np.shape(feat)
 
                 sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 sys.stdout.flush()
                 count += 1
                 
-                #self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
+                # Hard-but-correct way to get g
+                self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
 
                 #get margins to estimate confidence for each class
                 for i in range(num_classes):
@@ -285,14 +297,15 @@ class Colorizer(object):
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
         edges = self.get_edges(img)
-        self.g = np.sqrt(edges[0]**2 + edges[1]**2)
+        self.g_simple = np.log10(np.sqrt(edges[0]**2 + edges[1]**2))
         self.g = np.log10(self.g)
-      
+        #self.g = np.clip(self.g/np.max(self.g),0.0000001, 1.0)
+
         if SAVE_OUTPUTS:
             #dump to pickle
             print('saving to dump.dat')
             fid = open('dump.dat', 'wb') 
-            pickle.dump({'S': label_costs, 'g': self.g, 'cmap': self.label_to_color_map, 'colors': self.colors_present}, fid)
+            pickle.dump({'S': label_costs, 'g': self.g, 'cmap': self.label_to_color_map, 'colors': self.colors_present, 'g_simple': self.g_simple}, fid)
             fid.close()
 
         #postprocess using graphcut optimization 
@@ -307,7 +320,7 @@ class Colorizer(object):
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
         print('\nclassified %d%%\n'% np.max([100,(100*num_classified*(skip**2)/(m*n))]))
 
-        return output_img, self.g
+        return output_img, self.g, self.g_simple
 
 
     def load_image(self, path):
@@ -316,7 +329,7 @@ class Colorizer(object):
         '''
         
         #read in original image
-        img = cv2.imread(path)
+        img = cv2.imread(path) 
 
         #convert to L*a*b* space and split into channels
         l, a, b = cv2.split(cv2.cvtColor(img, cv.CV_BGR2Lab))
@@ -372,6 +385,9 @@ class Colorizer(object):
         pairwise_costs_int32 = (l*pairwise_costs).astype('int32')
         vv_int32 = (1/self.g).astype('int32')
         vh_int32 = (1/self.g).astype('int32')
+        
+        #vv_int32 = (1/np.clip(self.g,0.00001,10000)).astype('int32')
+        #vh_int32 = (1/np.clip(self.g,0.00001,10000)).astype('int32')
         
         #perform graphcut optimization
         new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=10, algorithm='swap') 

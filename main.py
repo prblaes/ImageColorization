@@ -21,7 +21,8 @@ if __name__ == '__main__':
     #cs_229_project Dropbox foler that Rasoul shared
 
 
-    training_files = ['images/houses/calhouse_0001.jpg' ]
+    training_files = ['images/houses/calhouse_0001.jpg']
+                      
     input_file = 'images/houses/calhouse_0007.jpg'
 
 
