@@ -24,7 +24,7 @@ SAVE_OUTPUTS = False
 #
 NTRAIN = 5000 #number of random pixels to train on
 
-NPCA = 30 # size of the reduced 
+NPCA = 20 # length of the reduced feature vectors
 
 class Colorizer(object):
     '''
@@ -49,6 +49,7 @@ class Colorizer(object):
         
         self.pca = PCA(npca)
 
+        self.centroids = []
         self.probability = probability
         self.colors_present = []
         self.surf = cv2.DescriptorExtractor_create('SURF')
@@ -126,13 +127,26 @@ class Colorizer(object):
         self.local_grads = []
         classes = []
         numTrainingExamples = 0
+
+        kmap_a = []
+        kmap_b = []
+
+
+        # compute color map
         for f in files:
 
+            _,a,b = self.load_image(f)
+            kmap_a = np.concatenate([kmap_a, a.flatten()])
+            kmap_b = np.concatenate([kmap_b, b.flatten()])
+
+        print "Training K Means" 
+        self.train_kmeans(kmap_a,kmap_b,self.ncolors)
+
+
+        for f in files:
             l,a,b = self.load_image(f)
-
-            self.compute_gradients(a,b)
-
-            a,b = self.posterize_kmeans(a,b,self.ncolors)
+            
+            a,b = self.quantize_kmeans(a,b)
 
             #quantize the a, b components
             #a,b = self.posterize(a,b)
@@ -158,7 +172,7 @@ class Colorizer(object):
                 classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
                     
                 #save vertical/horizontal color gradients at training feature locations
-                self.local_grads.append(self.grad[y,x])
+                #self.local_grads.append(self.grad[y,x])
 
                 numTrainingExamples = numTrainingExamples + 1
 
@@ -166,8 +180,13 @@ class Colorizer(object):
         self.features = self.scaler.fit_transform(np.array(features))
         classes = np.array(classes)
 
+        print "Size, Pre-PCA"
+        print np.shape(self.features)
         # reduce dimensionality
         self.features = self.pca.fit_transform(self.features)
+
+        print "Size, Post-PCA"
+        print np.shape(self.features)
 
         #train the classifiers
         #print " "
@@ -278,20 +297,27 @@ class Colorizer(object):
         num_classes = len(self.colors_present)
         label_costs = np.zeros((m,n,num_classes))
 
-        #self.g = np.zeros(raw_output_a.shape)
+        self.g = np.zeros(raw_output_a.shape)
         
         count=0
         for x in xrange(0,n,skip):
             for y in xrange(0,m,skip):
 
                 feat = self.scaler.transform(self.get_features(img, (x,y)))
+                
+                
+                #print "Size, Pre-PCA"
+                #print np.shape(feat)
                 feat = self.pca.transform(feat)
+                #print "size, Post-PCA"
+                #print np.shape(feat)
 
                 #sys.stdout.write('\rcolorizing: %3.3f%%'%(np.min([100, 100*count*skip**2/(m*n)])))
                 #sys.stdout.flush()
                 count += 1
                 
-                #self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
+                # Hard-but-correct way to get g
+                # self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
 
                 #get margins to estimate confidence for each class
                 for i in range(num_classes):
@@ -330,7 +356,7 @@ class Colorizer(object):
         '''
         
         #read in original image
-        img = cv2.imread(path)
+        img = cv2.imread(path) 
 
         #convert to L*a*b* space and split into channels
         l, a, b = cv2.split(cv2.cvtColor(img, cv.CV_BGR2Lab))
@@ -389,6 +415,9 @@ class Colorizer(object):
         vv_int32 = (self.g).astype('int32')
         vh_int32 = (self.g).astype('int32')
         
+        #vv_int32 = (1/np.clip(self.g,0.00001,10000)).astype('int32')
+        #vh_int32 = (1/np.clip(self.g,0.00001,10000)).astype('int32')
+        
         #perform graphcut optimization
         new_labels = pygco.cut_simple_vh(label_costs_int32, pairwise_costs_int32, vv_int32, vh_int32, n_iter=10, algorithm='swap') 
 
@@ -397,42 +426,45 @@ class Colorizer(object):
         return new_labels
         
 
-    def posterize_kmeans(self, a, b, k):
-        w,h = np.shape(a)
+    def train_kmeans(self, a, b, k):
+        # w,h = np.shape(a)
         
         # reshape matrix
-        pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
+        #pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
+        pixel = np.squeeze(cv2.merge((a.flatten(),b.flatten())))
+        print "pixel array size: "
+        print np.shape(pixel)
 
         # cluster
-        centroids,_ = kmeans(pixel,k) # six colors will be found
+        self.centroids,_ = kmeans(pixel,k) # six colors will be found
  
         # quantization
-        qnt,_ = vq(pixel,centroids)
+        qnt,_ = vq(pixel,self.centroids)
 
         # reshape the result of the quantization
-        centers_idx = np.reshape(qnt,(w,h))
-        clustered = centroids[centers_idx]
+        #centers_idx = np.reshape(qnt,(w,h))
+        #clustered = self.centroids[centers_idx]
 
         #color-mapping lookup tables
-        self.color_to_label_map = {c:i for i,c in enumerate([tuple(i) for i in centroids])} #this maps the color pair to the index of the color
+        self.color_to_label_map = {c:i for i,c in enumerate([tuple(i) for i in self.centroids])} #this maps the color pair to the index of the color
         self.label_to_color_map = dict(zip(self.color_to_label_map.values(),self.color_to_label_map.keys())) #takes a label and returns a,b
 
-        a_quant = clustered[:,:,0]
-        b_quant = clustered[:,:,1]
-        return a_quant, b_quant
+        #a_quant = clustered[:,:,0]
+        #b_quant = clustered[:,:,1]
+        #return a_quant, b_quant
 
-    def posterize_external_image(self, a,b):
+    def quantize_kmeans(self, a, b):
         w,h = np.shape(a)
         
         # reshape matrix
         pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
 
         # quantization
-        qnt,_ = vq(pixel,centroids)
+        qnt,_ = vq(pixel,self.centroids)
 
         # reshape the result of the quantization
         centers_idx = np.reshape(qnt,(w,h))
-        clustered = centroids[centers_idx]
+        clustered = self.centroids[centers_idx]
 
         a_quant = clustered[:,:,0]
         b_quant = clustered[:,:,1]

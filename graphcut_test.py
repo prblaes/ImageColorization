@@ -29,7 +29,7 @@ if __name__ == '__main__':
     c.g = d['g']
     c.label_to_color_map = d['cmap']
 
-    for l in range(0, 15, 3):
+    for l in range(0, 10, 1):
         print('l=%d'%l)
         output_labels = c.graphcut(d['S'], l=l)
         
