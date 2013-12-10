@@ -22,22 +22,22 @@ gridSpacing = 7
 
 SAVE_OUTPUTS = False
 #
-NTRAIN = 5000 #number of random pixels to train on
+#NTRAIN = 5000 #number of random pixels to train on
 
-NPCA = 20 # length of the reduced feature vectors
+#NPCA = 20 # length of the reduced feature vectors
 
 class Colorizer(object):
     '''
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=16, probability=False, npca=30, svmgamma=0.1, svmC=1, graphcut_lambda=1):
+    def __init__(self, ncolors=16, probability=False, npca=30, svmgamma=0.1, svmC=1, graphcut_lambda=1, ntrain=5000):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
         #self.ncolors = self.levels**2 #recalculate ncolors in case the provided parameter is not a perfect square
         self.ncolors = ncolors
-        
+        self.ntrain = ntrain
         #generate color palette for discrities Lab space
         #self.discretize_color_space()
 
@@ -139,9 +139,8 @@ class Colorizer(object):
             kmap_a = np.concatenate([kmap_a, a.flatten()])
             kmap_b = np.concatenate([kmap_b, b.flatten()])
 
-        print "Training K Means" 
+        #print "Training K Means" 
         self.train_kmeans(kmap_a,kmap_b,self.ncolors)
-
 
         for f in files:
             l,a,b = self.load_image(f)
@@ -160,7 +159,7 @@ class Colorizer(object):
             #for x in xrange(int(gridSpacing/2),n,gridSpacing):
             #    for y in xrange(int(gridSpacing/2),m,gridSpacing):
             #extract features from training image
-            for i in xrange(NTRAIN):
+            for i in xrange(self.ntrain):
                 #choose random pixel in training image
                 x = int(np.random.uniform(n))
                 y = int(np.random.uniform(m))
@@ -180,13 +179,13 @@ class Colorizer(object):
         self.features = self.scaler.fit_transform(np.array(features))
         classes = np.array(classes)
 
-        print "Size, Pre-PCA"
-        print np.shape(self.features)
+        #print "Size, Pre-PCA"
+        #print np.shape(self.features)
         # reduce dimensionality
         self.features = self.pca.fit_transform(self.features)
 
-        print "Size, Post-PCA"
-        print np.shape(self.features)
+        #print "Size, Post-PCA"
+        #print np.shape(self.features)
 
         #train the classifiers
         #print " "
@@ -395,7 +394,10 @@ class Colorizer(object):
         #vv = vv/np.max(vv)
         
         #v = np.sqrt(vv**2 + vh**2)
+
         v = 0.5*vv + 0.5*vh
+#        print('max pre-normalize: %f'%np.amax(v))
+        v = v/np.amax(v)
         return v
 
     def graphcut(self, label_costs, l=100):
@@ -432,8 +434,8 @@ class Colorizer(object):
         # reshape matrix
         #pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
         pixel = np.squeeze(cv2.merge((a.flatten(),b.flatten())))
-        print "pixel array size: "
-        print np.shape(pixel)
+        #print "pixel array size: "
+        #print np.shape(pixel)
 
         # cluster
         self.centroids,_ = kmeans(pixel,k) # six colors will be found
@@ -469,7 +471,15 @@ class Colorizer(object):
         a_quant = clustered[:,:,0]
         b_quant = clustered[:,:,1]
         return a_quant, b_quant
-    
+
+    def smooth(self,image):
+        l,a,b = cv2.split(cv2.cvtColor(image, cv.CV_BGR2Lab))
+
+        a_new = cv2.medianBlur(a, 15)
+        b_new = cv2.medianBlur(b, 15)
+
+        return cv2.cvtColor(cv2.merge((l, a_new, b_new)), cv.CV_Lab2BGR)
+
 #Make plots to test image loading, Lab conversion, and color channel quantization.
 #Should probably write as a proper unit test and move to a separate file.
 if __name__ == '__main__':
