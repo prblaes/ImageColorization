@@ -106,7 +106,7 @@ class Colorizer(object):
         #laplacian = self.getLaplacian(img,pos)
 #        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos)))
         #feat = np.concatenate((meanvar, self.feature_surf(img, pos)))
-        feat = np.concatenate((position, meanvar, self.feature_surf(img, pos), self.feature_dft(img, pos)))
+        feat = np.concatenate((meanvar, self.feature_surf(img, pos), self.feature_dft(img, pos)))
         #print feat
         return feat
 
