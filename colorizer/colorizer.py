@@ -114,13 +114,26 @@ class Colorizer(object):
         self.local_grads = []
         classes = []
         numTrainingExamples = 0
+
+        kmap_a = []
+        kmap_b = []
+
+
+        # compute color map
         for f in files:
 
-            l,a,b = self.load_image(f)
+            _,a,b = self.load_image(f)
+            kmap_a = np.concatenate([kmap_a, a.flatten()])
+            kmap_b = np.concatenate([kmap_b, b.flatten()])
 
-            self.compute_gradients(a,b)
-            print "Running K Means" 
-            a,b = self.posterize_kmeans(a,b,self.ncolors)
+        print "Training K Means" 
+        self.train_kmeans(kmap_a,kmap_b,self.ncolors)
+
+
+        for f in files:
+            l,a,b = self.load_image(f)
+            
+            a,b = self.quantize_kmeans(a,b)
 
             #quantize the a, b components
             #a,b = self.posterize(a,b)
@@ -146,7 +159,7 @@ class Colorizer(object):
                 classes.append(self.color_to_label_map[(a[y,x], b[y,x])])
                     
                 #save vertical/horizontal color gradients at training feature locations
-                self.local_grads.append(self.grad[y,x])
+                #self.local_grads.append(self.grad[y,x])
 
                 numTrainingExamples = numTrainingExamples + 1
 
@@ -289,7 +302,7 @@ class Colorizer(object):
                 count += 1
                 
                 # Hard-but-correct way to get g
-                self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
+                # self.g[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1] = self.color_variation(feat)
 
                 #get margins to estimate confidence for each class
                 for i in range(num_classes):
@@ -297,15 +310,15 @@ class Colorizer(object):
                     label_costs[y-int(skip/2):y+int(skip/2)+1,x-int(skip/2):x+int(skip/2)+1,i] = cost
 
         edges = self.get_edges(img)
-        self.g_simple = np.log10(np.sqrt(edges[0]**2 + edges[1]**2))
-        self.g = np.log10(self.g)
+        self.g = np.log10(np.sqrt(edges[0]**2 + edges[1]**2))
+        #self.g = np.log10(self.g)
         #self.g = np.clip(self.g/np.max(self.g),0.0000001, 1.0)
 
         if SAVE_OUTPUTS:
             #dump to pickle
             print('saving to dump.dat')
             fid = open('dump.dat', 'wb') 
-            pickle.dump({'S': label_costs, 'g': self.g, 'cmap': self.label_to_color_map, 'colors': self.colors_present, 'g_simple': self.g_simple}, fid)
+            pickle.dump({'S': label_costs, 'g': self.g, 'cmap': self.label_to_color_map, 'colors': self.colors_present}, fid)
             fid.close()
 
         #postprocess using graphcut optimization 
@@ -320,7 +333,7 @@ class Colorizer(object):
         output_img = cv2.cvtColor(cv2.merge((img, np.uint8(output_a), np.uint8(output_b))), cv.CV_Lab2RGB)
         print('\nclassified %d%%\n'% np.max([100,(100*num_classified*(skip**2)/(m*n))]))
 
-        return output_img, self.g, self.g_simple
+        return output_img, self.g
 
 
     def load_image(self, path):
@@ -397,11 +410,14 @@ class Colorizer(object):
         return new_labels
         
 
-    def posterize_kmeans(self, a, b, k):
-        w,h = np.shape(a)
+    def train_kmeans(self, a, b, k):
+        # w,h = np.shape(a)
         
         # reshape matrix
-        pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
+        #pixel = np.reshape((cv2.merge((a,b))),(w * h,2))
+        pixel = np.squeeze(cv2.merge((a.flatten(),b.flatten())))
+        print "pixel array size: "
+        print np.shape(pixel)
 
         # cluster
         self.centroids,_ = kmeans(pixel,k) # six colors will be found
@@ -410,18 +426,18 @@ class Colorizer(object):
         qnt,_ = vq(pixel,self.centroids)
 
         # reshape the result of the quantization
-        centers_idx = np.reshape(qnt,(w,h))
-        clustered = self.centroids[centers_idx]
+        #centers_idx = np.reshape(qnt,(w,h))
+        #clustered = self.centroids[centers_idx]
 
         #color-mapping lookup tables
         self.color_to_label_map = {c:i for i,c in enumerate([tuple(i) for i in self.centroids])} #this maps the color pair to the index of the color
         self.label_to_color_map = dict(zip(self.color_to_label_map.values(),self.color_to_label_map.keys())) #takes a label and returns a,b
 
-        a_quant = clustered[:,:,0]
-        b_quant = clustered[:,:,1]
-        return a_quant, b_quant
+        #a_quant = clustered[:,:,0]
+        #b_quant = clustered[:,:,1]
+        #return a_quant, b_quant
 
-    def posterize_external_image(self, a,b):
+    def quantize_kmeans(self, a, b):
         w,h = np.shape(a)
         
         # reshape matrix

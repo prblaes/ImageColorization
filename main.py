@@ -21,7 +21,7 @@ if __name__ == '__main__':
     #cs_229_project Dropbox foler that Rasoul shared
 
 
-    training_files = ['images/houses/calhouse_0001.jpg']
+    training_files = ['images/houses/calhouse_0001.jpg', 'images/houses/calhouse_0002.jpg']
                       
     input_file = 'images/houses/calhouse_0007.jpg'
 
@@ -64,9 +64,16 @@ if __name__ == '__main__':
 
     # compute prediction error:
     l_target, a_target, b_target = cv2.split(cv2.cvtColor(cv2.imread(input_file), cv.CV_BGR2Lab))
-    a_target, b_target = c.posterize_external_image(a_target,b_target)      # quantized true-color image
-    targetColorMap = cv2.merge((128*np.uint8(np.ones(np.shape(l_target))),a_target,b_target))
-    targetQuant = cv2.merge((l_target,a_target,b_target))   
+    a_target, b_target = c.quantize_kmeans(a_target,b_target)      # quantized true-color image
+    print "a, b sizes :"
+    print np.shape(l)
+    print np.shape(a)
+    print np.shape(b)
+    print np.shape(l_target)
+    print np.shape(a_target)
+    print np.shape(b_target)
+    targetColorMap = cv2.merge((128*np.uint8(np.ones(np.shape(l_target))),np.uint8(a_target),np.uint8(b_target)))
+    targetQuant = cv2.merge((np.uint8(l_target),np.uint8(a_target),np.uint8(b_target)))   
 
     a_err = pow(a - a_target,2)
     b_err = pow(b - b_target,2)
