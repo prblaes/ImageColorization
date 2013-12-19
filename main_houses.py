@@ -25,7 +25,9 @@ if __name__ == '__main__':
     #cs_229_project Dropbox foler that Rasoul shared
 
 
-    training_files = ['/shared/users/prblaes/ImageColorization/images/houses/calhouse_0007.jpg']
+    training_files = ['/shared/users/prblaes/ImageColorization/images/houses/calhouse_0001.jpg', \
+                      '/shared/users/prblaes/ImageColorization/images/houses/calhouse_0007.jpg', \
+                      '/shared/users/prblaes/ImageColorization/images/houses/calhouse_0015.jpg']
 
     input_files = glob('/shared/users/prblaes/ImageColorization/images/houses/*.jpg')
 
@@ -55,14 +57,14 @@ if __name__ == '__main__':
 
     try:
 
-        print('f')
+        print(input_files[comm.rank])
 
 
         #for now, convert an already RGB image to grayscale for our input
         grayscale_image = get_grayscale_from_color(input_files[comm.rank])
 
         #colorize the input image
-        colorized_image, g = c.colorize(grayscale_image,skip=2)
+        colorized_image, g = c.colorize(grayscale_image,skip=1)
 
         #save the outputs
         #cv2.imwrite('output_gray.jpg', grayscale_image)
@@ -71,8 +73,14 @@ if __name__ == '__main__':
 
         l, a, b = cv2.split(cv2.cvtColor(colorized_image, cv.CV_RGB2Lab))
         newColorMap = cv2.cvtColor(cv2.merge((128*np.uint8(np.ones(np.shape(l))),a,b)), cv.CV_Lab2BGR)
-        
+
+        a_new = cv2.medianBlur(a, 15)
+        b_new = cv2.medianBlur(b, 15)
+
+        img_new = cv2.cvtColor(cv2.merge((l, a_new, b_new)), cv.CV_Lab2BGR)
+
         cv2.imwrite(output_dir+os.path.basename(input_files[comm.rank]), cv2.cvtColor(colorized_image, cv.CV_RGB2BGR))
+        cv2.imwrite(output_dir+'smoothed_'+os.path.basename(input_files[comm.rank]), cv2.cvtColor(img_new, cv.CV_RGB2BGR))
         cv2.imwrite(output_dir+'cmap_'+os.path.basename(input_files[comm.rank]), newColorMap)
 
     except Exception:

@@ -109,8 +109,6 @@ if __name__ == '__main__':
 
             l,a,b = cv2.split(cv2.cvtColor(colorized_image, cv.CV_BGR2Lab))
             
-            elem = cv2.getStructuringElement(cv2.MORPH_CROSS, (15, 15))
-
             a_new = cv2.medianBlur(a, 15)
             b_new = cv2.medianBlur(b, 15)
 

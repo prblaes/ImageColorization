@@ -31,7 +31,7 @@ class Colorizer(object):
     TODO: write docstring...
     '''
 
-    def __init__(self, ncolors=16, probability=False, npca=30, svmgamma=0.1, svmC=1, graphcut_lambda=1, ntrain=5000):
+    def __init__(self, ncolors=16, probability=False, npca=30, svmgamma=0.1, svmC=1, graphcut_lambda=1, ntrain=3000):
        
         #number of bins in the discretized a,b channels
         self.levels = int(np.floor(np.sqrt(ncolors)))
@@ -397,7 +397,7 @@ class Colorizer(object):
 
         v = 0.5*vv + 0.5*vh
 #        print('max pre-normalize: %f'%np.amax(v))
-        v = v/np.amax(v)
+        #v = v/np.amax(v)
         return v
 
     def graphcut(self, label_costs, l=100):
